@@ -6,12 +6,11 @@ import (
 )
 
 type Config struct {
-    Proto                             string
-    Push_URL                          string
-    Labels                            string
-    Batch_Entries_Number              string
-    Default_Batch_Size                string
-    Default_Download_Concurrency      string
+    Region          string
+    Bucket          string
+    Prefix          string
+    Concurrency     int
+    LokiHost        string
 }
 
 func LoadConfig(path string) (config Config, err error) {
