@@ -14,7 +14,7 @@ type Config struct {
 }
 
 func LoadConfig(path string) (config Config, err error) {
-    viper.SetConfigName("cloudffront2loki.conf")
+    viper.SetConfigName("cloudfront2loki.conf")
     viper.SetConfigType("yaml")
     viper.AddConfigPath(path)
     viper.AddConfigPath("/etc/cloudfront2loki")
