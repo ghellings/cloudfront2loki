@@ -21,20 +21,20 @@ func TestLoadConfig(t *testing.T) {
 
 func TestEnvOverrideConfig(t *testing.T) {
 	testcfg := &Config{
-		Default_Download_Concurrency: "2", 
+		Concurrency: "2", 
 	}
 	testpath := createTempConfig("/promtail-cloudfront.conf", testcfg)
 	defer os.RemoveAll(testpath)
 
-	os.Setenv("DEFAULT_DOWNLOAD_CONCURRENCY", "1")
-	defer os.Unsetenv("DEFAULT_DOWNLOAD_CONCURRENCY")
+	os.Setenv("CONCURRENCY", "1")
+	defer os.Unsetenv("CONCURRENCY")
 
 	config, err := LoadConfig(testpath)
 	if err != nil {
 		t.Errorf("Expected no error, got: %s\n", err)
 	}
-	if config.Default_Download_Concurrency != "1" {
-		t.Errorf("Expected 'Default_Download_Concurrency' to equal 1, got: %s\n", config.Default_Download_Concurrency)
+	if config.Concurrency != "1" {
+		t.Errorf("Expected 'Concurrency' to equal 1, got: %s\n", config.Concurrency)
 	}
 }
 

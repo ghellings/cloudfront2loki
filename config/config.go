@@ -9,7 +9,7 @@ type Config struct {
     Region          string
     Bucket          string
     Prefix          string
-    Concurrency     int
+    Concurrency     string
     LokiHost        string
 }
 
