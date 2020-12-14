@@ -14,11 +14,11 @@ type Config struct {
 }
 
 func LoadConfig(path string) (config Config, err error) {
-    viper.SetConfigName("promtail-cloudfront.conf")
+    viper.SetConfigName("cloudffront2loki.conf")
     viper.SetConfigType("yaml")
     viper.AddConfigPath(path)
-    viper.AddConfigPath("/etc/promtail-cloudfront")
-    viper.AddConfigPath("/app/promtail-cloudfront")
+    viper.AddConfigPath("/etc/cloudfront2loki")
+    viper.AddConfigPath("/app/cloudfront2loki")
     viper.AddConfigPath(".")
     viper.AutomaticEnv()
     err = viper.ReadInConfig()
