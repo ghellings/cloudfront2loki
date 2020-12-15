@@ -7,6 +7,7 @@ import (
 	"compress/gzip"
 	"strconv"
 
+	"github.com/ghellings/cloudfront2loki/cflog"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -28,35 +29,6 @@ type S3Logs struct {
 	startafter                      string
 	dlconcurrency					int
 	concurrency						int
-}
-
-type CFLog struct {
-	Date 							string
-	Time   							string
-	X_edge_location   				string
-	Sc_bytes   						string
-	C_ip   							string
-	Cs_method   					string
-	Cs_Host   						string
-	Cs_uri_stem   					string
-	Sc_status   					string
-	Cs_Referer   					string
-	Cs_User_Agent   				string
-	Cs_uri_query   					string
-	Cs_Cookie   					string
-	X_edge_result_type   			string
-	X_edge_request_id   			string
-	X_host_header   				string
-	Cs_protocol   					string
-	Cs_bytes   						string
-	Time_taken   					string
-	X_forwarded_for   				string
-	Ssl_protocol   					string
-	Ssl_cipher   					string
-	X_edge_response_result_type   	string
-	Cs_protocol_version   			string
-	Fle_status   					string
-	Fle_encrypted_fields  			string
 }
 
 func GetDlmgr(region string) (downloader dlmgrinterface) {
@@ -109,7 +81,7 @@ func (s *S3Logs) getListofFiles(startafter string) (files []*string, nextfile st
 	return
 }
 
-func (s *S3Logs) parseCFLogs(buffers []*aws.WriteAtBuffer) (cfloglines []*CFLog, err error) {
+func (s *S3Logs) parseCFLogs(buffers []*aws.WriteAtBuffer) (cfloglines []*cflog.CFLog, err error) {
 	for _,buff := range buffers {
 		gr, err := gzip.NewReader( bytes.NewReader(buff.Bytes()) )
 		if err != nil {
@@ -127,7 +99,7 @@ func (s *S3Logs) parseCFLogs(buffers []*aws.WriteAtBuffer) (cfloglines []*CFLog,
 			return nil, err
 		}
 		for _,fields := range rows {
-			cflogline := &CFLog{
+			cflogline := &cflog.CFLog{
 				Date:							fields[0],
 				Time:   						fields[1],
 				X_edge_location:   				fields[2],
@@ -161,7 +133,7 @@ func (s *S3Logs) parseCFLogs(buffers []*aws.WriteAtBuffer) (cfloglines []*CFLog,
 	return
 }
 
-func (s *S3Logs) Download() (cfloglines []*CFLog, nextstartfile string, err error ) {
+func (s *S3Logs) Download() (cfloglines []*cflog.CFLog, nextstartfile string, err error ) {
 	nextfile := s.startafter
 	filecount := 0
 	for {

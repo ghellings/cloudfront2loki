@@ -3,15 +3,15 @@ package loki
 import(
 	"fmt"
 	"time"
+	"encoding/json"
 
+	"github.com/ghellings/cloudfront2loki/cflog"
 	"github.com/afiskon/promtail-client/promtail"
 )
 
 type Loki struct {
 	LokiHost		string
 }
-
-type log interface {}
 
 func New(lokihost string) (loki *Loki){
 	loki = &Loki{
@@ -20,7 +20,7 @@ func New(lokihost string) (loki *Loki){
 	return
 }
 
-func (l *Loki) PushLogs(logrecords []string, labels string, source string) (err error) {
+func (l *Loki) PushLogs(logrecords []*cflog.CFLog, labels string, source string) (err error) {
 	pushurl := fmt.Sprintf("http://%s/api/prom/push",l.LokiHost)
 	conf := promtail.ClientConfig{
 		PushURL:            pushurl,
@@ -33,9 +33,27 @@ func (l *Loki) PushLogs(logrecords []string, labels string, source string) (err 
 	lokiclient, err := promtail.NewClientProto(conf)
 	if err != nil {
 		return
-	}	
+	}
 	for _,log := range logrecords {
-		lokiclient.Infof("%s\n",log)
+		var jsondata []byte
+		jsondata,err = json.Marshal(log)
+		if err != nil {
+			panic(fmt.Sprintf("%v",err))
+		}
+		jsonstr := string(jsondata)
+		switch log.X_edge_response_result_type {
+		case "Hit":
+			lokiclient.Infof("%s\n",jsonstr)
+		case "Miss":
+			lokiclient.Infof("%s\n",jsonstr)
+		case "RefreshHit":
+			lokiclient.Infof("%s\n",jsonstr)
+		case "Redirect":
+			lokiclient.Infof("%s\n",jsonstr)
+		default:
+			lokiclient.Errorf("%s\n",jsonstr)
+		} 
+
 	}
 	lokiclient.Shutdown()	
 	return
