@@ -11,6 +11,8 @@ type Config struct {
     Prefix          string
     Concurrency     string
     LokiHost        string
+    LokiLabels      string
+    Startfile       string
 }
 
 func LoadConfig(path string) (config Config, err error) {
