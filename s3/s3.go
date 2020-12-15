@@ -1,10 +1,11 @@
 package s3logs
 
 import (
-	// "fmt"
+	"fmt"
 	"bytes"
 	"encoding/csv"
 	"compress/gzip"
+	"strconv"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -70,8 +71,15 @@ func GetS3client(region string) (s3client s3interface) {
 	return
 }
 
-func New(region string, bucket string, prefix string, concurrency int) (s3logs *S3Logs) {
+func New(region string, bucket string, prefix string, concurrency string) (s3logs *S3Logs) {
+	con,err := strconv.Atoi(concurrency)
+	if err != nil {
+		panic(fmt.Sprintf("%v",err))
+	}
 	s3logs = &S3Logs{
+		bucket:	  bucket,
+		prefix:   prefix,
+		concurrency: con, 
 		s3client: GetS3client(region),
 		dlmgr:	  GetDlmgr(region),
 	}

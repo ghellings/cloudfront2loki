@@ -10,7 +10,7 @@ import (
 )
 
 func TestNew(t *testing.T) {
-	s3logs := New("us-east-1","bogus","bogus",1)
+	s3logs := New("us-east-1","bogus","bogus","1")
 	if s3logs == nil {
 		t.Errorf("Expected s3logs to not be nil\n")
 	}
@@ -35,7 +35,7 @@ func TestGetListOfFiles(t *testing.T) {
 }
 
 func TestParseCFLogs(t *testing.T) {
-	s3logs := New("us-east-1","bogus","bogus",1)
+	s3logs := New("us-east-1","bogus","bogus","1")
 	buffer := []*aws.WriteAtBuffer{}
 	_,err := s3logs.parseCFLogs(buffer)
 	if err != nil {
