@@ -12,8 +12,8 @@ func TestLoadConfig(t *testing.T) {
 	testcfg := &Config{}
 	testpath := createTempConfig("/cloudfront2loki.conf", testcfg)
 	defer os.RemoveAll(testpath)
-	
-	_,err := LoadConfig(testpath)
+
+	_, err := LoadConfig(testpath)
 	if err != nil {
 		t.Errorf("Expect no error, got: %s\n", err)
 	}
@@ -21,7 +21,7 @@ func TestLoadConfig(t *testing.T) {
 
 func TestEnvOverrideConfig(t *testing.T) {
 	testcfg := &Config{
-		Concurrency: "2", 
+		Concurrency: "2",
 	}
 	testpath := createTempConfig("/cloudfront2loki.conf", testcfg)
 	defer os.RemoveAll(testpath)
@@ -38,8 +38,8 @@ func TestEnvOverrideConfig(t *testing.T) {
 	}
 }
 
-func createTempConfig(cfgname string, cfg *Config ) (cfgpath string) {
-	cfgyaml, err := yaml.Marshal(cfg)	
+func createTempConfig(cfgname string, cfg *Config) (cfgpath string) {
+	cfgyaml, err := yaml.Marshal(cfg)
 	if err != nil {
 		panic(err)
 	}

@@ -1,8 +1,8 @@
 package loki
 
 import (
-	"testing"
 	"fmt"
+	"testing"
 
 	"github.com/ghellings/cloudfront2loki/cflog"
 	"net/http"
@@ -25,9 +25,9 @@ func TestPushLogs(t *testing.T) {
 	defer ts.Close()
 	loki := New(ts.URL)
 	logs := []*cflog.CFLog{}
-	err := loki.PushLogs(logs,"{\"foo\":\"bar\"}", "bogus")
+	err := loki.PushLogs(logs, "{\"foo\":\"bar\"}", "bogus")
 	if err != nil {
-		t.Errorf("Expected no err, got: %s\n",err)
+		t.Errorf("Expected no err, got: %s\n", err)
 	}
 
 }
