@@ -31,32 +31,32 @@ type S3Logs struct {
 }
 
 type CFLog struct {
-	date 							string
-	time   							string
-	x_edge_location   				string
-	sc_bytes   						string
-	c_ip   							string
-	cs_method   					string
-	cs_Host   						string
-	cs_uri_stem   					string
-	sc_status   					string
-	cs_Referer   					string
-	cs_User_Agent   				string
-	cs_uri_query   					string
-	cs_Cookie   					string
-	x_edge_result_type   			string
-	x_edge_request_id   			string
-	x_host_header   				string
-	cs_protocol   					string
-	cs_bytes   						string
-	time_taken   					string
-	x_forwarded_for   				string
-	ssl_protocol   					string
-	ssl_cipher   					string
-	x_edge_response_result_type   	string
-	cs_protocol_version   			string
-	fle_status   					string
-	fle_encrypted_fields  			string
+	Date 							string
+	Time   							string
+	X_edge_location   				string
+	Sc_bytes   						string
+	C_ip   							string
+	Cs_method   					string
+	Cs_Host   						string
+	Cs_uri_stem   					string
+	Sc_status   					string
+	Cs_Referer   					string
+	Cs_User_Agent   				string
+	Cs_uri_query   					string
+	Cs_Cookie   					string
+	X_edge_result_type   			string
+	X_edge_request_id   			string
+	X_host_header   				string
+	Cs_protocol   					string
+	Cs_bytes   						string
+	Time_taken   					string
+	X_forwarded_for   				string
+	Ssl_protocol   					string
+	Ssl_cipher   					string
+	X_edge_response_result_type   	string
+	Cs_protocol_version   			string
+	Fle_status   					string
+	Fle_encrypted_fields  			string
 }
 
 func GetDlmgr(region string) (downloader dlmgrinterface) {
@@ -128,32 +128,32 @@ func (s *S3Logs) parseCFLogs(buffers []*aws.WriteAtBuffer) (cfloglines []*CFLog,
 		}
 		for _,fields := range rows {
 			cflogline := &CFLog{
-				date:							fields[0],
-				time:   						fields[1],
-				x_edge_location:   				fields[2],
-				sc_bytes:   					fields[3],
-				c_ip:  							fields[4],
-				cs_method:   					fields[5],
-				cs_Host:   						fields[6],
-				cs_uri_stem:   					fields[7],
-				sc_status:   					fields[8],
-				cs_Referer:   					fields[9],
-				cs_User_Agent:   				fields[10],
-				cs_uri_query:  					fields[11],
-				cs_Cookie:   					fields[12],
-				x_edge_result_type:   			fields[13],
-				x_edge_request_id:   			fields[14],
-				x_host_header:   				fields[15],
-				cs_protocol:   					fields[16],
-				cs_bytes:   					fields[17],
-				time_taken:   					fields[18],
-				x_forwarded_for:   				fields[19],
-				ssl_protocol:  					fields[20],
-				ssl_cipher:   					fields[21],
-				x_edge_response_result_type:   	fields[22],
-				cs_protocol_version:   			fields[23],
-				fle_status:   					fields[24],
-				fle_encrypted_fields:  			fields[25],
+				Date:							fields[0],
+				Time:   						fields[1],
+				X_edge_location:   				fields[2],
+				Sc_bytes:   					fields[3],
+				C_ip:  							fields[4],
+				Cs_method:   					fields[5],
+				Cs_Host:   						fields[6],
+				Cs_uri_stem:   					fields[7],
+				Sc_status:   					fields[8],
+				Cs_Referer:   					fields[9],
+				Cs_User_Agent:   				fields[10],
+				Cs_uri_query:  					fields[11],
+				Cs_Cookie:   					fields[12],
+				X_edge_result_type:   			fields[13],
+				X_edge_request_id:   			fields[14],
+				X_host_header:   				fields[15],
+				Cs_protocol:   					fields[16],
+				Cs_bytes:   					fields[17],
+				Time_taken:   					fields[18],
+				X_forwarded_for:   				fields[19],
+				Ssl_protocol:  					fields[20],
+				Ssl_cipher:   					fields[21],
+				X_edge_response_result_type:   	fields[22],
+				Cs_protocol_version:   			fields[23],
+				Fle_status:   					fields[24],
+				Fle_encrypted_fields:  			fields[25],
 			}
 			cfloglines = append(cfloglines,cflogline)
 		}
