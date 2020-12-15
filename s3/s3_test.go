@@ -44,13 +44,16 @@ func TestParseCFLogs(t *testing.T) {
 }
 
 func TestDownload(t *testing.T) {
-	//s3client := &mockS3Client{
-	//	listobjectreturn: &s3.ListObjectsV2Output{},
-	//}
+	s3client := &mockS3Client{
+		listobjectreturn: &s3.ListObjectsV2Output{},
+	}
+	dlclient := &mockDLMgr{}
+		
 	s3logs := &S3Logs{
-		//s3client: 	s3client,
-		s3client:		GetS3client("us-east-1"),
-		dlmgr:			GetDlmgr("us-east-1"),
+		s3client: 		s3client,
+		dlmgr:			dlclient,
+		//s3client:		GetS3client("us-east-1"),
+		//dlmgr:		GetDlmgr("us-east-1"),
 		bucket:     	"b7i-sumologic",
 		prefix:     	"cf-logs/E1OUPXPV64DT62",
 		concurrency:	2,
@@ -69,6 +72,6 @@ func (m *mockS3Client) ListObjectsV2(list *s3.ListObjectsV2Input) (*s3.ListObjec
 	return m.listobjectreturn, nil
 }
 type mockDLMgr struct {}
-func (m *mockS3Client) DownloadWithIterator(aws.Context, s3manager.BatchDownloadIterator, ...func(*s3manager.Downloader)) (error) {
+func (m *mockDLMgr) DownloadWithIterator(aws.Context, s3manager.BatchDownloadIterator, ...func(*s3manager.Downloader)) (error) {
 	return nil
 }

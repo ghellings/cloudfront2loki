@@ -10,7 +10,7 @@ import (
 
 func TestLoadConfig(t *testing.T) {
 	testcfg := &Config{}
-	testpath := createTempConfig("/promtail-cloudfront.conf", testcfg)
+	testpath := createTempConfig("/cloudfront2loki.conf", testcfg)
 	defer os.RemoveAll(testpath)
 	
 	_,err := LoadConfig(testpath)
@@ -23,7 +23,7 @@ func TestEnvOverrideConfig(t *testing.T) {
 	testcfg := &Config{
 		Concurrency: "2", 
 	}
-	testpath := createTempConfig("/promtail-cloudfront.conf", testcfg)
+	testpath := createTempConfig("/cloudfront2loki.conf", testcfg)
 	defer os.RemoveAll(testpath)
 
 	os.Setenv("CONCURRENCY", "1")
