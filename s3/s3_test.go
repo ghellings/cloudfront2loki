@@ -19,9 +19,10 @@ func TestGetListOfFiles(t *testing.T) {
 	s3client := &mockS3Client{
 		listobjectreturn: &s3.ListObjectsV2Output{},
 	}
+	dlclient := &mockDLMgr{}
 	s3logs := &S3Logs{
 		s3client:    s3client,
-		dlmgr:       GetDlmgr("us-east-1"),
+		dlmgr:       dlclient,
 		bucket:      "b7i-sumologic",
 		prefix:      "cf-logs/E1OUPXPV64DT62",
 		concurrency: 2,
@@ -50,8 +51,6 @@ func TestDownload(t *testing.T) {
 	s3logs := &S3Logs{
 		s3client: s3client,
 		dlmgr:    dlclient,
-		//s3client:		GetS3client("us-east-1"),
-		//dlmgr:		GetDlmgr("us-east-1"),
 		bucket:      "b7i-sumologic",
 		prefix:      "cf-logs/E1OUPXPV64DT62",
 		concurrency: 2,

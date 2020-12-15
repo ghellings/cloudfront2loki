@@ -20,7 +20,7 @@ func New(lokihost string) (loki *Loki) {
 	return
 }
 
-func (l *Loki) PushLogs(logrecords []*cflog.CFLog, labels string, source string) (err error) {
+func (l *Loki) PushLogs(logrecords []*cflog.CFLog, labels string) (err error) {
 	pushurl := fmt.Sprintf("http://%s/api/prom/push", l.LokiHost)
 	conf := promtail.ClientConfig{
 		PushURL:            pushurl,

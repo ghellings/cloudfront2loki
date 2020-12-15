@@ -22,7 +22,7 @@ func main() {
 			panic(fmt.Sprintf("%v", err))
 		}
 
-		err = lokiclient.PushLogs(cflogs, c.LokiLabels, c.Prefix)
+		err = lokiclient.PushLogs(cflogs, c.LokiLabels)
 		if err != nil {
 			panic(fmt.Sprintf("%v", err))
 		}

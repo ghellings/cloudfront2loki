@@ -25,7 +25,7 @@ func TestPushLogs(t *testing.T) {
 	defer ts.Close()
 	loki := New(ts.URL)
 	logs := []*cflog.CFLog{}
-	err := loki.PushLogs(logs, "{\"foo\":\"bar\"}", "bogus")
+	err := loki.PushLogs(logs, "{\"foo\":\"bar\"}")
 	if err != nil {
 		t.Errorf("Expected no err, got: %s\n", err)
 	}
