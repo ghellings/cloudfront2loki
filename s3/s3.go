@@ -127,12 +127,12 @@ func (s *S3Logs) parseCFLogs(buffers []*aws.WriteAtBuffer) (cfloglines []*cflog.
 				Fle_status:                  fields[24],
 				Fle_encrypted_fields:        fields[25],
 				C_port:                      fields[26],
-    			Time_to_first_byte:          fields[27],
-    			X_edge_detailed_result_type: fields[28],
-    			Sc_content_type:             fields[29],
-     			Sc_content_len:              fields[30],
-    			Sc_range_start:              fields[31],
-    			Sc_range_end:                fields[32],
+				Time_to_first_byte:          fields[27],
+				X_edge_detailed_result_type: fields[28],
+				Sc_content_type:             fields[29],
+				Sc_content_len:              fields[30],
+				Sc_range_start:              fields[31],
+				Sc_range_end:                fields[32],
 			}
 			cfloglines = append(cfloglines, cflogline)
 		}

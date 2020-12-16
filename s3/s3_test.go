@@ -49,8 +49,8 @@ func TestDownload(t *testing.T) {
 	dlclient := &mockDLMgr{}
 
 	s3logs := &S3Logs{
-		s3client: s3client,
-		dlmgr:    dlclient,
+		s3client:    s3client,
+		dlmgr:       dlclient,
 		bucket:      "b7i-sumologic",
 		prefix:      "cf-logs/E1OUPXPV64DT62",
 		concurrency: 2,
