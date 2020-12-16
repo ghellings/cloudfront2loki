@@ -7,4 +7,6 @@ require (
 	github.com/aws/aws-sdk-go v1.36.9
 	github.com/golang/snappy v0.0.2 // indirect
 	github.com/spf13/viper v1.7.1
+	github.com/stretchr/testify v1.6.1
+	gopkg.in/yaml.v2 v2.2.8
 )

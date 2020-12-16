@@ -1,10 +1,12 @@
 package config
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v2"
 )
 
@@ -14,9 +16,7 @@ func TestLoadConfig(t *testing.T) {
 	defer os.RemoveAll(testpath)
 
 	_, err := LoadConfig(testpath)
-	if err != nil {
-		t.Errorf("Expect no error, got: %s\n", err)
-	}
+	require.NoError(t, err)
 }
 
 func TestEnvOverrideConfig(t *testing.T) {
@@ -30,12 +30,8 @@ func TestEnvOverrideConfig(t *testing.T) {
 	defer os.Unsetenv("CONCURRENCY")
 
 	config, err := LoadConfig(testpath)
-	if err != nil {
-		t.Errorf("Expected no error, got: %s\n", err)
-	}
-	if config.Concurrency != "1" {
-		t.Errorf("Expected 'Concurrency' to equal 1, got: %s\n", config.Concurrency)
-	}
+	require.NoError(t, err)
+	require.Equal(t, "1", config.Concurrency, fmt.Sprintf("Expected 'Concurrency' to equal 1, got: %s\n", config.Concurrency))
 }
 
 func createTempConfig(cfgname string, cfg *Config) (cfgpath string) {

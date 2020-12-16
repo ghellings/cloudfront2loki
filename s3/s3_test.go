@@ -6,13 +6,12 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNew(t *testing.T) {
 	s3logs := New("us-east-1", "bogus", "bogus", "1")
-	if s3logs == nil {
-		t.Errorf("Expected s3logs to not be nil\n")
-	}
+	require.NotNil(t, s3logs)
 }
 
 func TestGetListOfFiles(t *testing.T) {
@@ -28,18 +27,14 @@ func TestGetListOfFiles(t *testing.T) {
 		concurrency: 2,
 	}
 	_, _, err := s3logs.getListofFiles("bogus")
-	if err != nil {
-		t.Errorf("Expected no error, got: %s\n", err)
-	}
+	require.NoError(t, err)
 }
 
 func TestParseCFLogs(t *testing.T) {
 	s3logs := New("us-east-1", "bogus", "bogus", "1")
 	buffer := []*aws.WriteAtBuffer{}
 	_, err := s3logs.parseCFLogs(buffer)
-	if err != nil {
-		t.Errorf("Expected no error, got: %s\n", err)
-	}
+	require.NoError(t, err)
 }
 
 func TestDownload(t *testing.T) {
@@ -57,9 +52,7 @@ func TestDownload(t *testing.T) {
 		startafter:  "cf-logs/E1OUPXPV64DT62.2019-12-04-16.3c39d514.gz",
 	}
 	_, _, err := s3logs.Download()
-	if err != nil {
-		t.Errorf("Expected no error, got: %s\n", err)
-	}
+	require.NoError(t, err)
 }
 
 type mockS3Client struct {
