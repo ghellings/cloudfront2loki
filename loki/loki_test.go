@@ -1,33 +1,35 @@
 package loki
 
 import (
-	"fmt"
+	"io/ioutil"
 	"testing"
 
-	"github.com/ghellings/cloudfront2loki/cflog"
 	"net/http"
 	"net/http/httptest"
+
+	"github.com/ghellings/cloudfront2loki/cflog"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNew(t *testing.T) {
 	loki := New("bogus")
-	if loki == nil {
-		t.Error("Expected loki to not be nil\n")
-	}
+	require.NotNil(t, loki)
 }
 
 func TestPushLogs(t *testing.T) {
+	response := ""
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintln(w, "Hello, client")
-		fmt.Println(r)
+		b, err := ioutil.ReadAll(r.Body)
+		require.NoError(t, err)
+		response = string(b)
 	}))
 
 	defer ts.Close()
-	loki := New(ts.URL)
-	logs := []*cflog.CFLog{}
-	err := loki.PushLogs(logs, "{\"foo\":\"bar\"}")
-	if err != nil {
-		t.Errorf("Expected no err, got: %s\n", err)
+	loki := New(ts.URL[7:])
+	logs := []*cflog.CFLog{
+		{Filename: "bob"},
 	}
-
+	err := loki.PushLogs(logs, "{\"foo\": \"bar\"}")
+	require.NoError(t, err)
+	require.Contains(t, response, "foo")
 }
