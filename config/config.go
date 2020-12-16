@@ -5,13 +5,13 @@ import (
 )
 
 type Config struct {
-	Region      string
-	Bucket      string
-	Prefix      string
-	Concurrency string
-	LokiHost    string
-	LokiLabels  string
-	Startfile   string
+	Region           string
+	Bucket           string
+	Prefix           string
+	Concurrency      string
+	LokiHost         string
+	LokiLabels       string
+	StartAfterFile   string
 }
 
 func LoadConfig(path string) (config Config, err error) {

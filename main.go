@@ -13,7 +13,7 @@ func main() {
 	if err != nil {
 		panic(fmt.Sprintf("%v", err))
 	}
-	s3logclient := s3logs.New(c.Region, c.Bucket, c.Prefix, c.Concurrency)
+	s3logclient := s3logs.New(c.Region, c.Bucket, c.Prefix, c.Concurrency, c.StartAfterFile)
 	lokiclient := loki.New(c.LokiHost)
 
 	for {

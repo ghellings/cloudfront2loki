@@ -31,6 +31,11 @@ type S3Logs struct {
 	concurrency   int
 }
 
+type wrbuffer struct {
+	filename      string
+	buffer        *aws.WriteAtBuffer
+}
+
 func GetDlmgr(region string) (downloader dlmgrinterface) {
 	sess := session.Must(session.NewSession(aws.NewConfig().WithRegion(region)))
 	downloader = s3manager.NewDownloader(sess)
@@ -43,7 +48,7 @@ func GetS3client(region string) (s3client s3interface) {
 	return
 }
 
-func New(region string, bucket string, prefix string, concurrency string) (s3logs *S3Logs) {
+func New(region string, bucket string, prefix string, concurrency string, startafter string) (s3logs *S3Logs) {
 	con, err := strconv.Atoi(concurrency)
 	if err != nil {
 		panic(fmt.Sprintf("%v", err))
@@ -54,6 +59,7 @@ func New(region string, bucket string, prefix string, concurrency string) (s3log
 		concurrency: con,
 		s3client:    GetS3client(region),
 		dlmgr:       GetDlmgr(region),
+		startafter:  startafter,
 	}
 	return
 }
@@ -66,7 +72,7 @@ func (s *S3Logs) getListofFiles(startafter string) (files []*string, nextfile st
 		Bucket:     aws.String(s.bucket),
 		Prefix:     aws.String(s.prefix),
 		StartAfter: aws.String(startafter),
-		MaxKeys:    aws.Int64(int64(s.dlconcurrency) + 1),
+		MaxKeys:    aws.Int64(int64(s.dlconcurrency)),
 	})
 	if err != nil {
 		return
@@ -74,16 +80,15 @@ func (s *S3Logs) getListofFiles(startafter string) (files []*string, nextfile st
 	for _, item := range keys.Contents {
 		files = append(files, item.Key)
 	}
-	if len(files) == s.concurrency+1 {
-		nextfile = *files[s.concurrency]
-		files = files[0 : s.concurrency-1]
+	if len(files) == s.concurrency {
+		nextfile = *files[len(files)-1]
 	}
 	return
 }
 
-func (s *S3Logs) parseCFLogs(buffers []*aws.WriteAtBuffer) (cfloglines []*cflog.CFLog, err error) {
-	for _, buff := range buffers {
-		gr, err := gzip.NewReader(bytes.NewReader(buff.Bytes()))
+func (s *S3Logs) parseCFLogs(buffers []*wrbuffer) (cfloglines []*cflog.CFLog, err error) {
+	for _, wrbuff := range buffers {
+		gr, err := gzip.NewReader(bytes.NewReader(wrbuff.buffer.Bytes()))
 		if err != nil {
 			return nil, err
 		}
@@ -93,13 +98,14 @@ func (s *S3Logs) parseCFLogs(buffers []*aws.WriteAtBuffer) (cfloglines []*cflog.
 		reader.Comma = '\t'
 		reader.Read()
 		reader.Read()
-		reader.FieldsPerRecord = 26
+		reader.FieldsPerRecord = 33
 		rows, err := reader.ReadAll()
 		if err != nil {
 			return nil, err
 		}
 		for _, fields := range rows {
 			cflogline := &cflog.CFLog{
+				Filename:                    wrbuff.filename,
 				Date:                        fields[0],
 				Time:                        fields[1],
 				X_edge_location:             fields[2],
@@ -150,7 +156,7 @@ func (s *S3Logs) Download() (cfloglines []*cflog.CFLog, nextstartfile string, er
 			return nil, nextfile, err
 		}
 		objects := []s3manager.BatchDownloadObject{}
-		buffers := []*aws.WriteAtBuffer{}
+		buffers := []*wrbuffer{}
 		for _, filename := range files {
 			buffer := aws.NewWriteAtBuffer([]byte{})
 			obj := s3manager.BatchDownloadObject{
@@ -161,7 +167,10 @@ func (s *S3Logs) Download() (cfloglines []*cflog.CFLog, nextstartfile string, er
 				Writer: buffer,
 			}
 			objects = append(objects, obj)
-			buffers = append(buffers, buffer)
+			buffers = append(buffers, &wrbuffer{
+				filename: *filename,
+				buffer:   buffer,
+			})
 		}
 		iter := &s3manager.DownloadObjectsIterator{Objects: objects}
 		if err := s.dlmgr.DownloadWithIterator(aws.BackgroundContext(), iter); err != nil {

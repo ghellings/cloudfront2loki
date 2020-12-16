@@ -10,7 +10,7 @@ import (
 )
 
 func TestNew(t *testing.T) {
-	s3logs := New("us-east-1", "bogus", "bogus", "1")
+	s3logs := New("us-east-1", "bogus-bucket", "bogus-prefix", "1", "bogus-startafterfile")
 	require.NotNil(t, s3logs)
 }
 
@@ -31,8 +31,8 @@ func TestGetListOfFiles(t *testing.T) {
 }
 
 func TestParseCFLogs(t *testing.T) {
-	s3logs := New("us-east-1", "bogus", "bogus", "1")
-	buffer := []*aws.WriteAtBuffer{}
+	s3logs := New("us-east-1", "bogus-bucket", "bogus-prefix", "1","bogus-startafterfile")
+	buffer := []*wrbuffer{}
 	_, err := s3logs.parseCFLogs(buffer)
 	require.NoError(t, err)
 }
