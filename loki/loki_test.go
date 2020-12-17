@@ -33,3 +33,9 @@ func TestPushLogs(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, response, "foo")
 }
+
+func TestGetLatestLog(t *testing.T) {
+	loki := New("localhost:3100")
+	_, err := loki.GetLatestLog("{source=\"cloudfront\",job=\"cloudfront2loki\"}")
+	require.NoError(t, err)
+}

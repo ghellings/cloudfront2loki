@@ -32,8 +32,8 @@ type S3Logs struct {
 }
 
 type wrbuffer struct {
-	filename      string
-	buffer        *aws.WriteAtBuffer
+	filename string
+	buffer   *aws.WriteAtBuffer
 }
 
 func GetDlmgr(region string) (downloader dlmgrinterface) {
@@ -48,7 +48,7 @@ func GetS3client(region string) (s3client s3interface) {
 	return
 }
 
-func New(region string, bucket string, prefix string, concurrency string, startafter string) (s3logs *S3Logs) {
+func New(region string, bucket string, prefix string, concurrency string) (s3logs *S3Logs) {
 	con, err := strconv.Atoi(concurrency)
 	if err != nil {
 		panic(fmt.Sprintf("%v", err))
@@ -59,7 +59,6 @@ func New(region string, bucket string, prefix string, concurrency string, starta
 		concurrency: con,
 		s3client:    GetS3client(region),
 		dlmgr:       GetDlmgr(region),
-		startafter:  startafter,
 	}
 	return
 }
@@ -146,14 +145,14 @@ func (s *S3Logs) parseCFLogs(buffers []*wrbuffer) (cfloglines []*cflog.CFLog, er
 	return
 }
 
-func (s *S3Logs) Download() (cfloglines []*cflog.CFLog, nextstartfile string, err error) {
-	nextfile := s.startafter
+func (s *S3Logs) Download(startafterfile string) (cfloglines []*cflog.CFLog, nextstartafterfile string, err error) {
 	filecount := 0
+	nextstartafterfile = startafterfile
 	for {
 		files := []*string{}
-		files, nextfile, err = s.getListofFiles(nextfile)
+		files, nextstartafterfile, err = s.getListofFiles(nextstartafterfile)
 		if err != nil {
-			return nil, nextfile, err
+			return nil, nextstartafterfile, err
 		}
 		objects := []s3manager.BatchDownloadObject{}
 		buffers := []*wrbuffer{}
@@ -174,18 +173,17 @@ func (s *S3Logs) Download() (cfloglines []*cflog.CFLog, nextstartfile string, er
 		}
 		iter := &s3manager.DownloadObjectsIterator{Objects: objects}
 		if err := s.dlmgr.DownloadWithIterator(aws.BackgroundContext(), iter); err != nil {
-			return nil, nextfile, err
+			return nil, nextstartafterfile, err
 		}
 		cfloglines_add, err := s.parseCFLogs(buffers)
 		if err != nil {
-			return nil, nextfile, err
+			return nil, nextstartafterfile, err
 		}
 		cfloglines = append(cfloglines, cfloglines_add...)
 		filecount = filecount + 1
-		if nextfile == "" || filecount >= s.concurrency {
+		if nextstartafterfile == "" || filecount >= s.concurrency {
 			break
 		}
 	}
-	nextstartfile = nextfile
 	return
 }

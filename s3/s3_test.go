@@ -10,7 +10,7 @@ import (
 )
 
 func TestNew(t *testing.T) {
-	s3logs := New("us-east-1", "bogus-bucket", "bogus-prefix", "1", "bogus-startafterfile")
+	s3logs := New("us-east-1", "bogus-bucket", "bogus-prefix", "1")
 	require.NotNil(t, s3logs)
 }
 
@@ -31,7 +31,7 @@ func TestGetListOfFiles(t *testing.T) {
 }
 
 func TestParseCFLogs(t *testing.T) {
-	s3logs := New("us-east-1", "bogus-bucket", "bogus-prefix", "1","bogus-startafterfile")
+	s3logs := New("us-east-1", "bogus-bucket", "bogus-prefix", "1")
 	buffer := []*wrbuffer{}
 	_, err := s3logs.parseCFLogs(buffer)
 	require.NoError(t, err)
@@ -49,9 +49,8 @@ func TestDownload(t *testing.T) {
 		bucket:      "b7i-sumologic",
 		prefix:      "cf-logs/E1OUPXPV64DT62",
 		concurrency: 2,
-		startafter:  "cf-logs/E1OUPXPV64DT62.2019-12-04-16.3c39d514.gz",
 	}
-	_, _, err := s3logs.Download()
+	_, _, err := s3logs.Download("bogus-startafterfile")
 	require.NoError(t, err)
 }
 

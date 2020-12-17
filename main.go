@@ -13,11 +13,19 @@ func main() {
 	if err != nil {
 		panic(fmt.Sprintf("%v", err))
 	}
-	s3logclient := s3logs.New(c.Region, c.Bucket, c.Prefix, c.Concurrency, c.StartAfterFile)
+	fmt.Printf("%+v\n", c)
+	s3logclient := s3logs.New(c.Region, c.Bucket, c.Prefix, c.Concurrency)
 	lokiclient := loki.New(c.LokiHost)
 
+	nextfile, err := lokiclient.GetLatestLog(c.LokiLabels)
+	if err != nil {
+		panic(fmt.Sprintf("%v", err))
+	}
+	if nextfile == "" {
+		nextfile = c.StartAfterFile
+	}
 	for {
-		cflogs, nextfile, err := s3logclient.Download()
+		cflogs, nextfile, err := s3logclient.Download(nextfile)
 		if err != nil {
 			panic(fmt.Sprintf("%v", err))
 		}
