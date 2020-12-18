@@ -14,6 +14,9 @@ import (
 
 func init() {
 	log.SetOutput(os.Stdout)
+	log.SetFormatter(&log.TextFormatter{
+		FullTimestamp: true,
+	})
 }
 
 func main() {
@@ -44,7 +47,7 @@ func main() {
 	if err != nil {
 		log.Error(fmt.Sprintf("%v", err))
 	}
-	if nextfile == "" {
+	if nextfile == "" || c.IgnoreLokiLatestLog {
 		nextfile = c.StartAfterFile
 	}
 

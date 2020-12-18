@@ -18,6 +18,7 @@ type Config struct {
 	Once                 bool
 	LogLevel             string
 	LoopSleepSeconds     int
+	IgnoreLokiLatestLog  bool
 }
 
 func LoadConfig(path string) (config Config, err error) {
