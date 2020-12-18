@@ -41,7 +41,7 @@ func (l *Loki) PushLogs(logrecords []*cflog.CFLog, labels string) (err error) {
 		var jsondata []byte
 		jsondata, err = json.Marshal(log)
 		if err != nil {
-			panic(fmt.Sprintf("%v", err))
+			return
 		}
 		jsonstr := string(jsondata)
 		switch log.X_edge_response_result_type {
@@ -93,23 +93,20 @@ func (l *Loki) GetLatestLog(query string) (latestlog string, err error) {
 			}
 		}
 	}
-	err = json.Unmarshal(body, &jsondata)
-	if err != nil {
+	if err = json.Unmarshal(body, &jsondata); err != nil {
 		return latestlog, err
 	}
 
 	// The result isn't true json, it has a leading tag which is either 'Info: or 'Error'
 	if len(jsondata.Data.Result) < 1 {
-		return "", nil
+		return
 	}
-	d := strings.SplitN(jsondata.Data.Result[0].Values[0][1], ":", 2)
-	if len(d) < 2 {
-		return "", nil
+	logdata := strings.SplitN(jsondata.Data.Result[0].Values[0][1], ":", 2)
+	if len(logdata) < 2 {
+		return
 	}
-	logdata := d[1]
 	var jsonlog struct{ Filename string }
-	err = json.Unmarshal([]byte(logdata), &jsonlog)
-	if err != nil {
+	if err := json.Unmarshal([]byte(logdata[1]), &jsonlog); err != nil {
 		return latestlog, err
 	}
 	latestlog = jsonlog.Filename

@@ -1,7 +1,7 @@
 package loki
 
 import (
-	"io"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -18,34 +18,41 @@ func TestNew(t *testing.T) {
 
 func TestPushLogs(t *testing.T) {
 	response := ""
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		b, err := ioutil.ReadAll(r.Body)
-		require.NoError(t, err)
-		response = string(b)
-	}))
-
+	ts := mockHttpServer("foo", 204, &response)
 	defer ts.Close()
 	loki := New(ts.URL[7:])
-	logs := []*cflog.CFLog{mockCFLog("bogus-file1"), mockCFLog("bogus-file2")}
+	logs := []*cflog.CFLog{
+		mockCFLog("bogus-file1", "Hit"),
+		mockCFLog("bogus-file2", "Miss"),
+		mockCFLog("bogus-file3", "RefreshHit"),
+		mockCFLog("bogus-file3", "Redirect"),
+		mockCFLog("bogus-file2", "Error"),
+	}
 	err := loki.PushLogs(logs, "{\"foo\": \"bar\"}")
 	require.NoError(t, err)
 	require.Contains(t, response, "foo")
 }
 
 func TestGetLatestLog(t *testing.T) {
+	// normal log response
+	response := ""
 	respstr := "{\"data\":{ \"result\": [ { \"values\": [[\"1\",\"Info: { \\\"Filename\\\": \\\"bogus-testfile\\\"}\"]]}]}}"
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, respstr)
-		_, err := ioutil.ReadAll(r.Body)
-		require.NoError(t, err)
-	}))
+	ts := mockHttpServer(respstr, 200, &response)
 	loki := New(ts.URL[7:])
 	filename, err := loki.GetLatestLog("{source=\"cloudfront\",job=\"cloudfront2loki\"}")
 	require.NoError(t, err)
 	require.Equal(t, filename, "bogus-testfile")
+	require.Equal(t, response, "")
+	// empty log response
+	ts = mockHttpServer("{}", 200, &response)
+	loki = New(ts.URL[7:])
+	filename, err = loki.GetLatestLog("{source=\"cloudfront\",job=\"cloudfront2loki\"}")
+	require.NoError(t, err)
+	require.Equal(t, filename, "")
+	require.Equal(t, response, "")
 }
 
-func mockCFLog(filename string) (log *cflog.CFLog) {
+func mockCFLog(filename string, response_type string) (log *cflog.CFLog) {
 	log = &cflog.CFLog{
 		Filename:                    filename,
 		Date:                        "-",
@@ -70,7 +77,7 @@ func mockCFLog(filename string) (log *cflog.CFLog) {
 		X_forwarded_for:             "-",
 		Ssl_protocol:                "-",
 		Ssl_cipher:                  "-",
-		X_edge_response_result_type: "-",
+		X_edge_response_result_type: response_type,
 		Cs_protocol_version:         "-",
 		Fle_status:                  "-",
 		Fle_encrypted_fields:        "-",
@@ -82,5 +89,18 @@ func mockCFLog(filename string) (log *cflog.CFLog) {
 		Sc_range_start:              "-",
 		Sc_range_end:                "-",
 	}
+	return
+}
+
+func mockHttpServer(respstr string, respcode int, resp *string) (ts *httptest.Server) {
+	ts = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(respcode)
+		w.Write([]byte(respstr))
+		b, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			panic(fmt.Sprintf("%v", err))
+		}
+		*resp = string(b)
+	}))
 	return
 }
