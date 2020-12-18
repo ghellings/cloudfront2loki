@@ -14,23 +14,44 @@ import (
 func TestNew(t *testing.T) {
 	loki := New("bogus")
 	require.NotNil(t, loki)
+	loki = New("bogus", "DEBUG")
+	require.NotNil(t, loki)
+	loki = New("bogus", "INFO")
+	require.NotNil(t, loki)
+	loki = New("bogus", "WARN")
+	require.NotNil(t, loki)
+	loki = New("bogus", "DISABLE")
+	require.NotNil(t, loki)
+	loki = New("bogus", "ERROR", 1000, 500)
+	require.NotNil(t, loki)
 }
 
 func TestPushLogs(t *testing.T) {
 	response := ""
 	ts := mockHttpServer("foo", 204, &response)
 	defer ts.Close()
-	loki := New(ts.URL[7:])
-	logs := []*cflog.CFLog{
-		mockCFLog("bogus-file1", "Hit"),
-		mockCFLog("bogus-file2", "Miss"),
-		mockCFLog("bogus-file3", "RefreshHit"),
-		mockCFLog("bogus-file3", "Redirect"),
-		mockCFLog("bogus-file2", "Error"),
+
+	var err error
+	var loki *Loki
+	var logs []*cflog.CFLog
+	loglevels := []string{"", "DEBUG", "INFO", "WARN", "DISABLE", "ERROR"}
+	for _, loglevel := range loglevels {
+		loki = New(ts.URL[7:], loglevel, 1000)
+		logs = []*cflog.CFLog{
+			mockCFLog("bogus-file1", "Hit"),
+			mockCFLog("bogus-file2", "Miss"),
+			mockCFLog("bogus-file3", "RefreshHit"),
+			mockCFLog("bogus-file3", "AbortedOrigin"),
+			mockCFLog("bogus-file3", "Redirect"),
+			mockCFLog("bogus-file3", "ClientCommError"),
+			mockCFLog("bogus-file3", "ClientHungUpRequest"),
+			mockCFLog("bogus-file3", "InvalidRequest"),
+			mockCFLog("bogus-file2", "Error"),
+		}
+		err = loki.PushLogs(logs, "{\"foo\": \"bar\"}")
+		require.NoError(t, err)
+		require.Contains(t, response, "foo")
 	}
-	err := loki.PushLogs(logs, "{\"foo\": \"bar\"}")
-	require.NoError(t, err)
-	require.Contains(t, response, "foo")
 }
 
 func TestGetLatestLog(t *testing.T) {
@@ -45,7 +66,7 @@ func TestGetLatestLog(t *testing.T) {
 	require.Equal(t, response, "")
 	// empty log response
 	ts = mockHttpServer("{}", 200, &response)
-	loki = New(ts.URL[7:])
+	loki = New(ts.URL[7:], "DISABLE")
 	filename, err = loki.GetLatestLog("{source=\"cloudfront\",job=\"cloudfront2loki\"}")
 	require.NoError(t, err)
 	require.Equal(t, filename, "")
@@ -77,13 +98,13 @@ func mockCFLog(filename string, response_type string) (log *cflog.CFLog) {
 		X_forwarded_for:             "-",
 		Ssl_protocol:                "-",
 		Ssl_cipher:                  "-",
-		X_edge_response_result_type: response_type,
+		X_edge_response_result_type: "-",
 		Cs_protocol_version:         "-",
 		Fle_status:                  "-",
 		Fle_encrypted_fields:        "-",
 		C_port:                      "-",
 		Time_to_first_byte:          "-",
-		X_edge_detailed_result_type: "-",
+		X_edge_detailed_result_type: response_type,
 		Sc_content_type:             "-",
 		Sc_content_len:              "-",
 		Sc_range_start:              "-",

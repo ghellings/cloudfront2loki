@@ -13,12 +13,41 @@ import (
 )
 
 type Loki struct {
-	LokiHost string
+	LokiHost           string
+	LogLevel           promtail.LogLevel
+	BatchEntriesNumber int
+	BatchWaitSeconds   time.Duration
 }
 
-func New(lokihost string) (loki *Loki) {
+func New(lokihost string, args ...interface{}) (loki *Loki) {
+	lvl := promtail.ERROR
+	if len(args) > 0 {
+		switch args[0] {
+		case "DEBUG":
+			lvl = promtail.DEBUG
+		case "INFO":
+			lvl = promtail.INFO
+		case "WARN":
+			lvl = promtail.WARN
+		case "DISABLE":
+			lvl = promtail.DISABLE
+		default:
+			lvl = promtail.ERROR
+		}
+	}
+	batch := 500
+	if len(args) > 1 {
+		batch = args[1].(int)
+	}
+	batchwait := 5 * time.Second
+	if len(args) > 2 {
+		batchwait = time.Duration(args[2].(int)) * time.Second
+	}
 	loki = &Loki{
-		LokiHost: lokihost,
+		LokiHost:           lokihost,
+		LogLevel:           lvl,
+		BatchEntriesNumber: batch,
+		BatchWaitSeconds:   batchwait,
 	}
 	return
 }
@@ -28,10 +57,10 @@ func (l *Loki) PushLogs(logrecords []*cflog.CFLog, labels string) (err error) {
 	conf := promtail.ClientConfig{
 		PushURL:            pushurl,
 		Labels:             labels,
-		BatchWait:          5 * time.Second,
-		BatchEntriesNumber: 5000,
+		BatchWait:          l.BatchWaitSeconds,
+		BatchEntriesNumber: 500,
 		SendLevel:          promtail.INFO,
-		PrintLevel:         promtail.DEBUG,
+		PrintLevel:         l.LogLevel,
 	}
 	lokiclient, err := promtail.NewClientProto(conf)
 	if err != nil {
@@ -44,7 +73,7 @@ func (l *Loki) PushLogs(logrecords []*cflog.CFLog, labels string) (err error) {
 			return
 		}
 		jsonstr := string(jsondata)
-		switch log.X_edge_response_result_type {
+		switch log.X_edge_detailed_result_type {
 		case "Hit":
 			lokiclient.Infof("%s\n", jsonstr)
 		case "Miss":
@@ -53,6 +82,14 @@ func (l *Loki) PushLogs(logrecords []*cflog.CFLog, labels string) (err error) {
 			lokiclient.Infof("%s\n", jsonstr)
 		case "Redirect":
 			lokiclient.Infof("%s\n", jsonstr)
+		case "AbortedOrigin":
+			lokiclient.Warnf("%s\n", jsonstr)
+		case "ClientCommError":
+			lokiclient.Warnf("%s\n", jsonstr)
+		case "ClientHungUpRequest":
+			lokiclient.Warnf("%s\n", jsonstr)
+		case "InvalidRequest":
+			lokiclient.Warnf("%s\n", jsonstr)
 		default:
 			lokiclient.Errorf("%s\n", jsonstr)
 		}

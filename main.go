@@ -15,7 +15,7 @@ func main() {
 	}
 	fmt.Printf("%+v\n", c)
 	s3logclient := s3logs.New(c.Region, c.Bucket, c.Prefix, c.Concurrency)
-	lokiclient := loki.New(c.LokiHost)
+	lokiclient := loki.New(c.LokiHost, c.LokiLogLevel, c.LokiBatchSize, c.LokiBatchWaitSeconds)
 
 	nextfile, err := lokiclient.GetLatestLog(c.LokiLabels)
 	if err != nil {
