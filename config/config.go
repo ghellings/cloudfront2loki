@@ -15,6 +15,9 @@ type Config struct {
 	LokiBatchSize        int
 	LokiBatchWaitSeconds int
 	StartAfterFile       string
+	Once                 bool
+	LogLevel             string
+	LoopSleepSeconds     int
 }
 
 func LoadConfig(path string) (config Config, err error) {

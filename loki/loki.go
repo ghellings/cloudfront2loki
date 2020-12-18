@@ -58,7 +58,7 @@ func (l *Loki) PushLogs(logrecords []*cflog.CFLog, labels string) (err error) {
 		PushURL:            pushurl,
 		Labels:             labels,
 		BatchWait:          l.BatchWaitSeconds,
-		BatchEntriesNumber: 500,
+		BatchEntriesNumber: l.BatchEntriesNumber,
 		SendLevel:          promtail.INFO,
 		PrintLevel:         l.LogLevel,
 	}

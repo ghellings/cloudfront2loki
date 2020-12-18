@@ -38,15 +38,15 @@ func TestPushLogs(t *testing.T) {
 	for _, loglevel := range loglevels {
 		loki = New(ts.URL[7:], loglevel, 1000)
 		logs = []*cflog.CFLog{
-			mockCFLog("bogus-file1", "Hit"),
-			mockCFLog("bogus-file2", "Miss"),
-			mockCFLog("bogus-file3", "RefreshHit"),
-			mockCFLog("bogus-file3", "AbortedOrigin"),
-			mockCFLog("bogus-file3", "Redirect"),
-			mockCFLog("bogus-file3", "ClientCommError"),
-			mockCFLog("bogus-file3", "ClientHungUpRequest"),
-			mockCFLog("bogus-file3", "InvalidRequest"),
-			mockCFLog("bogus-file2", "Error"),
+			cflog.MockCFLog("bogus-file1", "Hit"),
+			cflog.MockCFLog("bogus-file2", "Miss"),
+			cflog.MockCFLog("bogus-file3", "RefreshHit"),
+			cflog.MockCFLog("bogus-file3", "AbortedOrigin"),
+			cflog.MockCFLog("bogus-file3", "Redirect"),
+			cflog.MockCFLog("bogus-file3", "ClientCommError"),
+			cflog.MockCFLog("bogus-file3", "ClientHungUpRequest"),
+			cflog.MockCFLog("bogus-file3", "InvalidRequest"),
+			cflog.MockCFLog("bogus-file2", "Error"),
 		}
 		err = loki.PushLogs(logs, "{\"foo\": \"bar\"}")
 		require.NoError(t, err)
@@ -71,46 +71,6 @@ func TestGetLatestLog(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, filename, "")
 	require.Equal(t, response, "")
-}
-
-func mockCFLog(filename string, response_type string) (log *cflog.CFLog) {
-	log = &cflog.CFLog{
-		Filename:                    filename,
-		Date:                        "-",
-		Time:                        "-",
-		X_edge_location:             "-",
-		Sc_bytes:                    "-",
-		C_ip:                        "-",
-		Cs_method:                   "-",
-		Cs_Host:                     "-",
-		Cs_uri_stem:                 "-",
-		Sc_status:                   "-",
-		Cs_Referer:                  "-",
-		Cs_User_Agent:               "-",
-		Cs_uri_query:                "-",
-		Cs_Cookie:                   "-",
-		X_edge_result_type:          "-",
-		X_edge_request_id:           "-",
-		X_host_header:               "-",
-		Cs_protocol:                 "-",
-		Cs_bytes:                    "-",
-		Time_taken:                  "-",
-		X_forwarded_for:             "-",
-		Ssl_protocol:                "-",
-		Ssl_cipher:                  "-",
-		X_edge_response_result_type: "-",
-		Cs_protocol_version:         "-",
-		Fle_status:                  "-",
-		Fle_encrypted_fields:        "-",
-		C_port:                      "-",
-		Time_to_first_byte:          "-",
-		X_edge_detailed_result_type: response_type,
-		Sc_content_type:             "-",
-		Sc_content_len:              "-",
-		Sc_range_start:              "-",
-		Sc_range_end:                "-",
-	}
-	return
 }
 
 func mockHttpServer(respstr string, respcode int, resp *string) (ts *httptest.Server) {
