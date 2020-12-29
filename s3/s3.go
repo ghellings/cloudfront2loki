@@ -12,6 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/ghellings/cloudfront2loki/cflog"
+	log "github.com/sirupsen/logrus"
 )
 
 type dlmgrinterface interface {
@@ -63,13 +64,14 @@ func New(region string, bucket string, prefix string, concurrency string) (s3log
 	return
 }
 
-func (s *S3Logs) getListofFiles(startafter string) (files []*string, nextfile string, err error) {
+func (s *S3Logs) getListofFiles(prefix string, startafter string) (files []*string, nextfile string, err error) {
 	if s.dlconcurrency < 1 || s.dlconcurrency > s.concurrency {
 		s.dlconcurrency = s.concurrency
 	}
+	log.Infof("Looking for files in %s after %s", prefix, startafter)
 	keys, err := s.s3client.ListObjectsV2(&s3.ListObjectsV2Input{
 		Bucket:     aws.String(s.bucket),
-		Prefix:     aws.String(s.prefix),
+		Prefix:     aws.String(prefix),
 		StartAfter: aws.String(startafter),
 		MaxKeys:    aws.Int64(int64(s.dlconcurrency)),
 	})
@@ -79,6 +81,7 @@ func (s *S3Logs) getListofFiles(startafter string) (files []*string, nextfile st
 	for _, item := range keys.Contents {
 		files = append(files, item.Key)
 	}
+	log.Infof("Found %d files", len(keys.Contents))
 	if len(files) == s.concurrency {
 		nextfile = *files[len(files)-1]
 	}
@@ -89,6 +92,7 @@ func (s *S3Logs) parseCFLogs(buffers []*wrbuffer) (cfloglines []*cflog.CFLog, er
 	for _, wrbuff := range buffers {
 		gr, err := gzip.NewReader(bytes.NewReader(wrbuff.buffer.Bytes()))
 		if err != nil {
+			err = fmt.Errorf("Failed to uncompress file: %s\n%v\ncontents: %s", wrbuff.filename, err, string(wrbuff.buffer.Bytes()))
 			return nil, err
 		}
 		defer gr.Close()
@@ -100,6 +104,7 @@ func (s *S3Logs) parseCFLogs(buffers []*wrbuffer) (cfloglines []*cflog.CFLog, er
 		reader.FieldsPerRecord = 33
 		rows, err := reader.ReadAll()
 		if err != nil {
+			err = fmt.Errorf("Unable to parse file: %s \n%v\n%+v", wrbuff.filename, err, reader)
 			return nil, err
 		}
 		for _, fields := range rows {
@@ -146,44 +151,95 @@ func (s *S3Logs) parseCFLogs(buffers []*wrbuffer) (cfloglines []*cflog.CFLog, er
 }
 
 func (s *S3Logs) Download(startafterfile string) (cfloglines []*cflog.CFLog, nextstartafterfile string, err error) {
-	filecount := 0
 	nextstartafterfile = startafterfile
 	for {
-		files := []*string{}
-		files, nextstartafterfile, err = s.getListofFiles(nextstartafterfile)
+		var files []*string
+		var cfloglines_add []*cflog.CFLog
+		files, nextstartafterfile, err = s.getListofFiles(s.prefix, nextstartafterfile)
 		if err != nil {
 			return nil, nextstartafterfile, err
 		}
-		objects := []s3manager.BatchDownloadObject{}
-		buffers := []*wrbuffer{}
-		for _, filename := range files {
-			buffer := aws.NewWriteAtBuffer([]byte{})
-			obj := s3manager.BatchDownloadObject{
-				Object: &s3.GetObjectInput{
-					Bucket: aws.String(s.bucket),
-					Key:    filename,
-				},
-				Writer: buffer,
-			}
-			objects = append(objects, obj)
-			buffers = append(buffers, &wrbuffer{
-				filename: *filename,
-				buffer:   buffer,
-			})
-		}
-		iter := &s3manager.DownloadObjectsIterator{Objects: objects}
-		if err := s.dlmgr.DownloadWithIterator(aws.BackgroundContext(), iter); err != nil {
-			return nil, nextstartafterfile, err
-		}
-		cfloglines_add, err := s.parseCFLogs(buffers)
+		log.Debugf("Found %d files to download", len(files))
+		cfloglines_add, err = s.downLoadFiles(files)
 		if err != nil {
 			return nil, nextstartafterfile, err
 		}
 		cfloglines = append(cfloglines, cfloglines_add...)
-		filecount = filecount + 1
-		if nextstartafterfile == "" || filecount >= s.concurrency {
+		if nextstartafterfile == "" {
+			log.Debugf("Returning %d log lines", len(cfloglines))
+			return
+		}
+	}
+	return
+}
+
+func (s *S3Logs) downLoadFiles(filenames []*string) (cfloglines []*cflog.CFLog, err error) {
+	if len(filenames) < 1 {
+		return
+	}
+	var objects []s3manager.BatchDownloadObject
+	var buffers []*wrbuffer
+	for _, filename := range filenames {
+		buffer := aws.NewWriteAtBuffer([]byte{})
+		obj := s3manager.BatchDownloadObject{
+			Object: &s3.GetObjectInput{
+				Bucket: aws.String(s.bucket),
+				Key:    filename,
+			},
+			Writer: buffer,
+		}
+		objects = append(objects, obj)
+		buffers = append(buffers, &wrbuffer{
+			filename: *filename,
+			buffer:   buffer,
+		})
+	}
+
+	log.Debugf("Downloading files %d from s3", len(buffers))
+	iter := &s3manager.DownloadObjectsIterator{Objects: objects}
+	if err = s.dlmgr.DownloadWithIterator(aws.BackgroundContext(), iter); err != nil {
+		return
+	}
+	log.Debugf("Parsing files %d from s3", len(buffers))
+	cfloglines_add, err := s.parseCFLogs(buffers)
+	if err != nil {
+		return
+	}
+	cfloglines = append(cfloglines, cfloglines_add...)
+	return
+}
+
+func (s *S3Logs) WatchBucket(prefix string, pulledfiles map[string]int) (cfloglines []*cflog.CFLog, pulledfilesret map[string]int, err error) {
+	nextfile := ""
+	for {
+		var files []*string
+		files, nextfile, err = s.getListofFiles(prefix, nextfile)
+		if err != nil {
+			return nil, pulledfiles, err
+		}
+		var paredfiles []*string
+		for _, file := range files {
+			if _, exists := pulledfiles[*file]; !exists {
+				paredfiles = append(paredfiles, file)
+			}
+		}
+		if len(paredfiles) > 0 {
+			var cfloglines_add []*cflog.CFLog
+			cfloglines_add, err = s.downLoadFiles(paredfiles)
+			if err != nil {
+				return nil, pulledfiles, err
+			}
+			cfloglines = append(cfloglines, cfloglines_add...)
+			for _, file := range files {
+				log.Debugf("Pulled %s", *file)
+				pulledfiles[*file] = 1
+			}
+		}
+		if nextfile == "" {
 			break
 		}
 	}
+	pulledfilesret = pulledfiles
+	log.Debugf("Returning %d log lines", len(cfloglines))
 	return
 }
