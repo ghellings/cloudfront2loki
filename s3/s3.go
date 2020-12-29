@@ -68,7 +68,7 @@ func (s *S3Logs) getListofFiles(prefix string, startafter string) (files []*stri
 	if s.dlconcurrency < 1 || s.dlconcurrency > s.concurrency {
 		s.dlconcurrency = s.concurrency
 	}
-	log.Infof("Looking for files in %s after %s", prefix, startafter)
+	log.Debugf("Looking for files in %s after %s", prefix, startafter)
 	keys, err := s.s3client.ListObjectsV2(&s3.ListObjectsV2Input{
 		Bucket:     aws.String(s.bucket),
 		Prefix:     aws.String(prefix),
@@ -81,7 +81,7 @@ func (s *S3Logs) getListofFiles(prefix string, startafter string) (files []*stri
 	for _, item := range keys.Contents {
 		files = append(files, item.Key)
 	}
-	log.Infof("Found %d files", len(keys.Contents))
+	log.Debugf("Found %d files", len(keys.Contents))
 	if len(files) == s.concurrency {
 		nextfile = *files[len(files)-1]
 	}
@@ -166,7 +166,7 @@ func (s *S3Logs) Download(startafterfile string) (cfloglines []*cflog.CFLog, nex
 		}
 		cfloglines = append(cfloglines, cfloglines_add...)
 		if nextstartafterfile == "" {
-			log.Debugf("Returning %d log lines", len(cfloglines))
+			log.Infof("Returning %d log lines", len(cfloglines))
 			return
 		}
 	}
@@ -240,6 +240,6 @@ func (s *S3Logs) WatchBucket(prefix string, pulledfiles map[string]int) (cflogli
 		}
 	}
 	pulledfilesret = pulledfiles
-	log.Debugf("Returning %d log lines", len(cfloglines))
+	log.Infof("Returning %d log lines", len(cfloglines))
 	return
 }

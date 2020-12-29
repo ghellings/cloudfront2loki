@@ -113,7 +113,7 @@ func main() {
 			time.Sleep(time.Duration(c.LoopSleepSeconds * int(time.Second)))
 
 		} else {
-			log.Infof("Reading files after %s, %s", c.Prefix+"."+lastfiledate, nextfile)
+			log.Debugf("Reading files after %s, %s", c.Prefix+"."+lastfiledate, nextfile)
 			s3logclient = s3logs.New(c.Region, c.Bucket, c.Prefix+"."+lastfiledate, c.Concurrency)
 			var cflogs []*cflog.CFLog
 			cflogs, nextfile, err = s3logclient.Download(nextfile)
