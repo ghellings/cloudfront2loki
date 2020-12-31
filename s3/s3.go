@@ -213,17 +213,20 @@ func (s *S3Logs) downLoadFiles(filenames []*string) (cfloglines []*cflog.CFLog, 
 func (s *S3Logs) WatchBucket(prefix string, pulledfiles map[string]int) (cfloglines []*cflog.CFLog, pulledfilesret map[string]int, err error) {
 	nextfile := ""
 	for {
+		// Get list of files in bucket starting from nextfile
 		var files []*string
 		files, nextfile, err = s.getListofFiles(prefix, nextfile)
 		if err != nil {
 			return nil, pulledfiles, err
 		}
+		// Check to see if we'ved pulled the file already
 		var paredfiles []*string
 		for _, file := range files {
 			if _, exists := pulledfiles[*file]; !exists {
 				paredfiles = append(paredfiles, file)
 			}
 		}
+		// Download the pared list of files
 		if len(paredfiles) > 0 {
 			var cfloglines_add []*cflog.CFLog
 			cfloglines_add, err = s.downLoadFiles(paredfiles)
@@ -232,10 +235,10 @@ func (s *S3Logs) WatchBucket(prefix string, pulledfiles map[string]int) (cflogli
 			}
 			cfloglines = append(cfloglines, cfloglines_add...)
 			for _, file := range files {
-				log.Debugf("Pulled %s", *file)
 				pulledfiles[*file] = 1
 			}
 		}
+		// Quit if no nextfile
 		if nextfile == "" {
 			break
 		}
