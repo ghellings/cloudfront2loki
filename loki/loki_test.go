@@ -28,7 +28,8 @@ func TestNew(t *testing.T) {
 
 func TestPushLogs(t *testing.T) {
 	response := ""
-	ts := mockHttpServer("foo", 204, &response)
+	respstr := "{\"data\":{\"stats\": {\"ingester\":{\"totalChunksMatched\":0}}}}\n"
+	ts := mockHttpServer(respstr, 200, &response)
 	defer ts.Close()
 
 	var err error
@@ -50,8 +51,17 @@ func TestPushLogs(t *testing.T) {
 		}
 		err = loki.PushLogs(logs, "{\"foo\": \"bar\"}")
 		require.NoError(t, err)
-		require.Contains(t, response, "foo")
 	}
+}
+
+func TestIsLogInLoki(t *testing.T) {
+	response := ""
+	respstr := "{\"data\":{\"stats\": {\"ingester\":{\"totalChunksMatched\":1}}}}\n"
+	ts := mockHttpServer(respstr, 200, &response)
+	loki := New(ts.URL[7:])
+	exists,err := loki.IsLogInLoki("Testlog")
+	require.NoError(t,err)
+	require.True(t,exists)
 }
 
 func TestGetLatestLog(t *testing.T) {

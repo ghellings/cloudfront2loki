@@ -10,6 +10,7 @@ import (
 
 	"github.com/afiskon/promtail-client/promtail"
 	"github.com/ghellings/cloudfront2loki/cflog"
+	"github.com/sirupsen/logrus"
 )
 
 type Loki struct {
@@ -54,18 +55,10 @@ func New(lokihost string, args ...interface{}) (loki *Loki) {
 
 func (l *Loki) PushLogs(logrecords []*cflog.CFLog, labels string) (err error) {
 	pushurl := fmt.Sprintf("http://%s/api/prom/push", l.LokiHost)
-	conf := promtail.ClientConfig{
-		PushURL:            pushurl,
-		Labels:             labels,
-		BatchWait:          l.BatchWaitSeconds,
-		BatchEntriesNumber: l.BatchEntriesNumber,
-		SendLevel:          promtail.INFO,
-		PrintLevel:         l.LogLevel,
-	}
-	lokiclient, err := promtail.NewClientProto(conf)
-	if err != nil {
-		return
-	}
+
+	filename := ""
+	skippedfilename := ""
+	lokiclient, err := promtail.NewClientProto(promtail.ClientConfig{})
 	for _, log := range logrecords {
 		var jsondata []byte
 		jsondata, err = json.Marshal(log)
@@ -73,6 +66,41 @@ func (l *Loki) PushLogs(logrecords []*cflog.CFLog, labels string) (err error) {
 			return
 		}
 		jsonstr := string(jsondata)
+		if log.Filename == skippedfilename   {
+			//logrus.Debug("Skipping")
+			continue
+		}
+		if log.Filename != filename {
+			newlabels := fmt.Sprintf(
+				"%s,filename=\"%s\"}",
+				strings.TrimRight(labels,"}"),
+				log.Filename,
+			)
+			lokiclient, err = promtail.NewClientProto(promtail.ClientConfig{
+				PushURL:            pushurl,
+				Labels:             newlabels,
+				BatchWait:          l.BatchWaitSeconds,
+				BatchEntriesNumber: l.BatchEntriesNumber,
+				SendLevel:          promtail.INFO,
+				PrintLevel:         l.LogLevel,
+			})
+			if err != nil {
+				return
+			}
+			var exists bool
+			if exists,err = l.IsLogInLoki(log.Filename); exists  {
+				if log.Filename != skippedfilename {
+					logrus.Warnf("Skipping file %s, already in Loki", log.Filename)
+					skippedfilename = log.Filename
+				}
+				continue
+			}
+			if err != nil {
+				return
+			}
+			filename = log.Filename
+			logrus.Debugf("Created a new Loki label for %s", filename)
+		}
 		switch log.X_edge_detailed_result_type {
 		case "Hit":
 			lokiclient.Infof("%s\n", jsonstr)
@@ -148,4 +176,47 @@ func (l *Loki) GetLatestLog(query string) (latestlog string, err error) {
 	}
 	latestlog = jsonlog.Filename
 	return
+}
+
+func (l *Loki) IsLogInLoki(filename string) (ret bool, err error ) {
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", "http://"+l.LokiHost+"/loki/api/v1/query_range", nil)
+	if err != nil {
+		return false,err
+	}
+	loc, err := time.LoadLocation("UTC")
+	if err != nil {
+		return false,err
+	}
+	starttime := time.Now().In(loc).Add(time.Duration(-120)).UnixNano()
+	q := req.URL.Query()
+	q.Add("query", fmt.Sprintf("{filename=\"%s\"}",filename))
+	q.Add("limit", "1")
+	q.Add("start",fmt.Sprintf("%d",starttime))
+	req.URL.RawQuery = q.Encode()
+	resp,err := client.Do(req)
+	if err != nil {
+		return false,err
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return false,err
+	}
+	var jsondata struct {
+		Data struct {
+			Stats struct {
+				Ingester struct {
+					TotalChunksMatched int
+				}
+			}
+		}
+	}
+	if err = json.Unmarshal(body, &jsondata); err != nil {
+		return
+	}
+	if jsondata.Data.Stats.Ingester.TotalChunksMatched > 0 {
+		ret = true
+	}
+	return 
 }
