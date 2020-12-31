@@ -55,22 +55,40 @@ func New(lokihost string, args ...interface{}) (loki *Loki) {
 
 func (l *Loki) PushLogs(logrecords []*cflog.CFLog, labels string) (err error) {
 	pushurl := fmt.Sprintf("http://%s/api/prom/push", l.LokiHost)
-
 	filename := ""
 	skippedfilename := ""
 	lokiclient, err := promtail.NewClientProto(promtail.ClientConfig{})
+	if err != nil {
+		return
+	}
+	// Parse log lines
 	for _, log := range logrecords {
+		// Turn log line into json
 		var jsondata []byte
 		jsondata, err = json.Marshal(log)
 		if err != nil {
 			return
 		}
 		jsonstr := string(jsondata)
+		// Skip this log line if we're already figured out it's in loki
 		if log.Filename == skippedfilename {
-			//logrus.Debug("Skipping")
 			continue
 		}
+		// This log line came from a file that's different than the last
 		if log.Filename != filename {
+			// Check if this file is already in loki
+			var exists bool
+			if exists, err = l.IsLogInLoki(log.Filename); exists {
+				if log.Filename != skippedfilename {
+					logrus.Warnf("Skipping file %s, already in Loki", log.Filename)
+					skippedfilename = log.Filename
+				}
+				continue
+			}
+			if err != nil {
+				return
+			}
+			// Create a new label for this file
 			newlabels := fmt.Sprintf(
 				"%s,filename=\"%s\"}",
 				strings.TrimRight(labels, "}"),
@@ -87,20 +105,10 @@ func (l *Loki) PushLogs(logrecords []*cflog.CFLog, labels string) (err error) {
 			if err != nil {
 				return
 			}
-			var exists bool
-			if exists, err = l.IsLogInLoki(log.Filename); exists {
-				if log.Filename != skippedfilename {
-					logrus.Warnf("Skipping file %s, already in Loki", log.Filename)
-					skippedfilename = log.Filename
-				}
-				continue
-			}
-			if err != nil {
-				return
-			}
 			filename = log.Filename
 			logrus.Debugf("Created a new Loki label for %s", filename)
 		}
+		// Actually log the message to loki
 		switch log.X_edge_detailed_result_type {
 		case "Hit":
 			lokiclient.Infof("%s\n", jsonstr)
@@ -129,7 +137,6 @@ func (l *Loki) PushLogs(logrecords []*cflog.CFLog, labels string) (err error) {
 
 func (l *Loki) GetLatestLog(query string) (latestlog string, err error) {
 	latestlog = ""
-
 	// Asking loki for the last log entry to get it's filename
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", "http://"+l.LokiHost+"/loki/api/v1/query_range", nil)
@@ -161,8 +168,7 @@ func (l *Loki) GetLatestLog(query string) (latestlog string, err error) {
 	if err = json.Unmarshal(body, &jsondata); err != nil {
 		return latestlog, err
 	}
-
-	// The result isn't true json, it has a leading tag which is either 'Info: or 'Error'
+	// The result isn't json, it has a leading tag which is either 'Info: or 'Error'
 	if len(jsondata.Data.Result) < 1 {
 		return
 	}
@@ -184,11 +190,13 @@ func (l *Loki) IsLogInLoki(filename string) (ret bool, err error) {
 	if err != nil {
 		return false, err
 	}
+	// Limit the query to the last two hours
 	loc, err := time.LoadLocation("UTC")
 	if err != nil {
 		return false, err
 	}
 	starttime := time.Now().In(loc).Add(time.Duration(-120)).UnixNano()
+
 	q := req.URL.Query()
 	q.Add("query", fmt.Sprintf("{filename=\"%s\"}", filename))
 	q.Add("limit", "1")
