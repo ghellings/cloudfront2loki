@@ -180,7 +180,7 @@ func (s *S3Logs) downLoadFiles(filenames []*string) (cfloglines []*cflog.CFLog, 
 	var objects []s3manager.BatchDownloadObject
 	var buffers []*wrbuffer
 	for _, filename := range filenames {
-		log.Debugf("Preparing to download %s",filename)
+		log.Debugf("Preparing to download %s",*filename)
 		buffer := aws.NewWriteAtBuffer([]byte{})
 		obj := s3manager.BatchDownloadObject{
 			Object: &s3.GetObjectInput{
