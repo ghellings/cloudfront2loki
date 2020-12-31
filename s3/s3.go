@@ -90,15 +90,18 @@ func (s *S3Logs) getListofFiles(prefix string, startafter string) (files []*stri
 
 func (s *S3Logs) parseCFLogs(buffers []*wrbuffer) (cfloglines []*cflog.CFLog, err error) {
 	for _, wrbuff := range buffers {
+		// Uncompress gzipped file
 		gr, err := gzip.NewReader(bytes.NewReader(wrbuff.buffer.Bytes()))
 		if err != nil {
 			err = fmt.Errorf("Failed to uncompress file: %s\n%v\ncontents: %s", wrbuff.filename, err, string(wrbuff.buffer.Bytes()))
 			return nil, err
 		}
 		defer gr.Close()
+		// Parse file
 		reader := csv.NewReader(gr)
 		reader.LazyQuotes = true
 		reader.Comma = '\t'
+		// There are two unneeded rows in each file
 		reader.Read()
 		reader.Read()
 		reader.FieldsPerRecord = 33
@@ -153,6 +156,7 @@ func (s *S3Logs) parseCFLogs(buffers []*wrbuffer) (cfloglines []*cflog.CFLog, er
 func (s *S3Logs) Download(startafterfile string) (cfloglines []*cflog.CFLog, nextstartafterfile string, err error) {
 	nextstartafterfile = startafterfile
 	for {
+		// Get a list of stuff to download
 		var files []*string
 		var cfloglines_add []*cflog.CFLog
 		files, nextstartafterfile, err = s.getListofFiles(s.prefix, nextstartafterfile)
@@ -160,10 +164,12 @@ func (s *S3Logs) Download(startafterfile string) (cfloglines []*cflog.CFLog, nex
 			return nil, nextstartafterfile, err
 		}
 		log.Debugf("Found %d files to download", len(files))
+		// Download files and parse them
 		cfloglines_add, err = s.downLoadFiles(files)
 		if err != nil {
 			return nil, nextstartafterfile, err
 		}
+		// Returned parsed files
 		cfloglines = append(cfloglines, cfloglines_add...)
 		if nextstartafterfile == "" {
 			log.Infof("Returning %d log lines", len(cfloglines))
@@ -177,10 +183,11 @@ func (s *S3Logs) downLoadFiles(filenames []*string) (cfloglines []*cflog.CFLog, 
 	if len(filenames) < 1 {
 		return
 	}
+	// Prepare buffers to write to for each file
 	var objects []s3manager.BatchDownloadObject
 	var buffers []*wrbuffer
 	for _, filename := range filenames {
-		log.Debugf("Preparing to download %s",*filename)
+		log.Debugf("Preparing to download %s", *filename)
 		buffer := aws.NewWriteAtBuffer([]byte{})
 		obj := s3manager.BatchDownloadObject{
 			Object: &s3.GetObjectInput{
@@ -195,18 +202,21 @@ func (s *S3Logs) downLoadFiles(filenames []*string) (cfloglines []*cflog.CFLog, 
 			buffer:   buffer,
 		})
 	}
-
+	// actually do the downloading
 	log.Debugf("Downloading files %d from s3", len(buffers))
 	iter := &s3manager.DownloadObjectsIterator{Objects: objects}
 	if err = s.dlmgr.DownloadWithIterator(aws.BackgroundContext(), iter); err != nil {
 		return
 	}
+	// Parse the files
 	log.Debugf("Parsing files %d from s3", len(buffers))
 	cfloglines_add, err := s.parseCFLogs(buffers)
 	if err != nil {
 		return
 	}
+
 	cfloglines = append(cfloglines, cfloglines_add...)
+	log.Infof("Returning %d log lines", len(cfloglines))
 	return
 }
 
