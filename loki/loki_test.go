@@ -59,9 +59,9 @@ func TestIsLogInLoki(t *testing.T) {
 	respstr := "{\"data\":{\"stats\": {\"ingester\":{\"totalChunksMatched\":1}}}}\n"
 	ts := mockHttpServer(respstr, 200, &response)
 	loki := New(ts.URL[7:])
-	exists,err := loki.IsLogInLoki("Testlog")
-	require.NoError(t,err)
-	require.True(t,exists)
+	exists, err := loki.IsLogInLoki("Testlog")
+	require.NoError(t, err)
+	require.True(t, exists)
 }
 
 func TestGetLatestLog(t *testing.T) {

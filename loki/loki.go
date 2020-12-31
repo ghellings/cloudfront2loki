@@ -66,14 +66,14 @@ func (l *Loki) PushLogs(logrecords []*cflog.CFLog, labels string) (err error) {
 			return
 		}
 		jsonstr := string(jsondata)
-		if log.Filename == skippedfilename   {
+		if log.Filename == skippedfilename {
 			//logrus.Debug("Skipping")
 			continue
 		}
 		if log.Filename != filename {
 			newlabels := fmt.Sprintf(
 				"%s,filename=\"%s\"}",
-				strings.TrimRight(labels,"}"),
+				strings.TrimRight(labels, "}"),
 				log.Filename,
 			)
 			lokiclient, err = promtail.NewClientProto(promtail.ClientConfig{
@@ -88,7 +88,7 @@ func (l *Loki) PushLogs(logrecords []*cflog.CFLog, labels string) (err error) {
 				return
 			}
 			var exists bool
-			if exists,err = l.IsLogInLoki(log.Filename); exists  {
+			if exists, err = l.IsLogInLoki(log.Filename); exists {
 				if log.Filename != skippedfilename {
 					logrus.Warnf("Skipping file %s, already in Loki", log.Filename)
 					skippedfilename = log.Filename
@@ -178,30 +178,30 @@ func (l *Loki) GetLatestLog(query string) (latestlog string, err error) {
 	return
 }
 
-func (l *Loki) IsLogInLoki(filename string) (ret bool, err error ) {
+func (l *Loki) IsLogInLoki(filename string) (ret bool, err error) {
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", "http://"+l.LokiHost+"/loki/api/v1/query_range", nil)
 	if err != nil {
-		return false,err
+		return false, err
 	}
 	loc, err := time.LoadLocation("UTC")
 	if err != nil {
-		return false,err
+		return false, err
 	}
 	starttime := time.Now().In(loc).Add(time.Duration(-120)).UnixNano()
 	q := req.URL.Query()
-	q.Add("query", fmt.Sprintf("{filename=\"%s\"}",filename))
+	q.Add("query", fmt.Sprintf("{filename=\"%s\"}", filename))
 	q.Add("limit", "1")
-	q.Add("start",fmt.Sprintf("%d",starttime))
+	q.Add("start", fmt.Sprintf("%d", starttime))
 	req.URL.RawQuery = q.Encode()
-	resp,err := client.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
-		return false,err
+		return false, err
 	}
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return false,err
+		return false, err
 	}
 	var jsondata struct {
 		Data struct {
@@ -218,5 +218,5 @@ func (l *Loki) IsLogInLoki(filename string) (ret bool, err error ) {
 	if jsondata.Data.Stats.Ingester.TotalChunksMatched > 0 {
 		ret = true
 	}
-	return 
+	return
 }
