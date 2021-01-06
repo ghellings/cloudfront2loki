@@ -171,7 +171,7 @@ func (s *S3Logs) Download(startafterfile string) (cfloglines []*cflog.CFLog, nex
 		}
 		// Returned parsed files
 		cfloglines = append(cfloglines, cfloglines_add...)
-		if nextstartafterfile == "" {
+		if len(cfloglines) >= s.concurrency  || nextstartafterfile == "" {
 			log.Infof("Returning %d log lines", len(cfloglines))
 			return
 		}
