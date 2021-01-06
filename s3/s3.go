@@ -249,7 +249,7 @@ func (s *S3Logs) WatchBucket(prefix string, pulledfiles map[string]int) (cflogli
 			}
 		}
 		// Quit if no nextfile
-		if nextfile == "" {
+		if len(cfloglines) >= s.concurrency  || nextfile == "" {
 			break
 		}
 	}
