@@ -1,66 +1,73 @@
 package loki
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"reflect"
 	"strings"
+	"sync"
 	"time"
 
-	"github.com/afiskon/promtail-client/promtail"
 	"github.com/ghellings/cloudfront2loki/cflog"
+	"github.com/golang/protobuf/proto"
+	"github.com/golang/snappy"
+	"github.com/grafana/loki/pkg/logproto"
 	"github.com/sirupsen/logrus"
 )
 
 type Loki struct {
 	LokiHost           string
-	LogLevel           promtail.LogLevel
+	BaseLabels         string
+	LabelFields        []string
 	BatchEntriesNumber int
 	BatchWaitSeconds   time.Duration
+	entries            chan LabeledEntry
+	quit               chan struct{}
+	waitGroup          sync.WaitGroup
+}
+
+type LabeledEntry struct {
+	entry  logproto.Entry
+	labels string
 }
 
 func New(lokihost string, args ...interface{}) (loki *Loki) {
-	lvl := promtail.ERROR
-	if len(args) > 0 {
-		switch args[0] {
-		case "DEBUG":
-			lvl = promtail.DEBUG
-		case "INFO":
-			lvl = promtail.INFO
-		case "WARN":
-			lvl = promtail.WARN
-		case "DISABLE":
-			lvl = promtail.DISABLE
-		default:
-			lvl = promtail.ERROR
-		}
-	}
 	batch := 500
-	if len(args) > 1 {
-		batch = args[1].(int)
+	if len(args) > 0 {
+		batch = args[0].(int)
 	}
 	batchwait := 5 * time.Second
+	if len(args) > 1 {
+		batchwait = time.Duration(args[1].(int)) * time.Second
+	}
+	baselabels := "{}"
 	if len(args) > 2 {
-		batchwait = time.Duration(args[2].(int)) * time.Second
+		baselabels = args[2].(string)
+	}
+	labelfields := []string{}
+	if len(args) > 3 {
+		labelfields = args[3].([]string)
 	}
 	loki = &Loki{
 		LokiHost:           lokihost,
-		LogLevel:           lvl,
 		BatchEntriesNumber: batch,
 		BatchWaitSeconds:   batchwait,
+		entries:            make(chan LabeledEntry),
+		quit:               make(chan struct{}),
+		BaseLabels:         baselabels,
+		LabelFields:        labelfields,
 	}
+	go loki.run()
 	return
 }
 
-func (l *Loki) PushLogs(logrecords []*cflog.CFLog, labels string) (err error) {
-	pushurl := fmt.Sprintf("http://%s/api/prom/push", l.LokiHost)
+func (l *Loki) PushLogs(logrecords []*cflog.CFLog) (err error) {
 	filename := ""
 	skippedfilename := ""
-	lokiclient, err := promtail.NewClientProto(promtail.ClientConfig{})
-	if err != nil {
-		return
-	}
+
 	// Parse log lines
 	for _, log := range logrecords {
 		// Turn log line into json
@@ -85,54 +92,126 @@ func (l *Loki) PushLogs(logrecords []*cflog.CFLog, labels string) (err error) {
 				}
 				continue
 			}
-			if err != nil {
-				return
-			}
-			// Create a new label for this file
-			newlabels := fmt.Sprintf(
-				"%s,filename=\"%s\"}",
-				strings.TrimRight(labels, "}"),
-				log.Filename,
-			)
-			lokiclient, err = promtail.NewClientProto(promtail.ClientConfig{
-				PushURL:            pushurl,
-				Labels:             newlabels,
-				BatchWait:          l.BatchWaitSeconds,
-				BatchEntriesNumber: l.BatchEntriesNumber,
-				SendLevel:          promtail.INFO,
-				PrintLevel:         l.LogLevel,
-			})
+			err = l.protoEntry(*log, jsonstr)
 			if err != nil {
 				return
 			}
 			filename = log.Filename
 			logrus.Debugf("Created a new Loki label for %s", filename)
 		}
-		// Actually log the message to loki
-		switch log.X_edge_detailed_result_type {
-		case "Hit":
-			lokiclient.Infof("%s\n", jsonstr)
-		case "Miss":
-			lokiclient.Infof("%s\n", jsonstr)
-		case "RefreshHit":
-			lokiclient.Infof("%s\n", jsonstr)
-		case "Redirect":
-			lokiclient.Infof("%s\n", jsonstr)
-		case "AbortedOrigin":
-			lokiclient.Warnf("%s\n", jsonstr)
-		case "ClientCommError":
-			lokiclient.Warnf("%s\n", jsonstr)
-		case "ClientHungUpRequest":
-			lokiclient.Warnf("%s\n", jsonstr)
-		case "InvalidRequest":
-			lokiclient.Warnf("%s\n", jsonstr)
-		default:
-			lokiclient.Errorf("%s\n", jsonstr)
+	}
+	return
+}
+
+func (l *Loki) newLabels(log cflog.CFLog) (newlabels string) {
+	newlabels = strings.TrimRight(l.BaseLabels, "}")
+	for _, field := range l.LabelFields {
+		val := reflect.ValueOf(log).FieldByName(field)
+		newlabels = fmt.Sprintf("%s,%s=\"%s\"", newlabels, field, val)
+	}
+	newlabels = fmt.Sprintf("%s}", newlabels)
+	return
+}
+
+func (l *Loki) protoEntry(log cflog.CFLog, jsonstr string) (err error) {
+	var t time.Time
+	t, err = time.Parse(time.RFC3339, log.Date+"T"+log.Time+"Z")
+	if err != nil {
+		return
+	}
+	labels := l.newLabels(log)
+	l.entries <- LabeledEntry{
+		entry: logproto.Entry{
+			Timestamp: t,
+			Line:      jsonstr,
+		},
+		labels: labels,
+	}
+	return
+}
+
+func (l *Loki) send(labeledentries []LabeledEntry) (err error) {
+	mappedentries := make(map[string][]logproto.Entry)
+	for _, log := range labeledentries {
+		mappedentries[log.labels] = append(mappedentries[log.labels], log.entry)
+	}
+	var streams []logproto.Stream
+	for label, entries := range mappedentries {
+		streams = append(streams, logproto.Stream{
+			Labels:  label,
+			Entries: entries,
+		})
+	}
+	pushreq := logproto.PushRequest{
+		Streams: streams,
+	}
+	buf, err := proto.Marshal(&pushreq)
+	if err != nil {
+		logrus.Errorf("Failed to marshal streams: %v", err)
+		return err
+	}
+	buf = snappy.Encode(nil, buf)
+	pushurl := fmt.Sprintf("http://%s/api/prom/push", l.LokiHost)
+	client := &http.Client{}
+	req, err := http.NewRequest("POST", pushurl, bytes.NewBuffer(buf))
+	if err != nil {
+		logrus.Errorf("Failed to POST to Loki host %s :%v", l.LokiHost, err)
+		return err
+	}
+	req.Header.Set("Content-Type", "application/x-protobuf")
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 204 {
+		body, _ := ioutil.ReadAll(resp.Body)
+		err = fmt.Errorf("Unexpected HTTP status code: %d url: %s message: %s", resp.StatusCode, pushurl, string(body))
+		return err
+	}
+	return
+}
+
+func (l *Loki) run() {
+	var batch []LabeledEntry
+	batchSize := 0
+	maxWait := time.NewTimer(l.BatchWaitSeconds)
+
+	defer func() {
+		if batchSize > 0 {
+			l.send(batch)
 		}
 
+		l.waitGroup.Done()
+	}()
+
+	for {
+		select {
+		case <-l.quit:
+			return
+		case entry := <-l.entries:
+			batchSize++
+			batch = append(batch, entry)
+			if batchSize >= l.BatchEntriesNumber {
+				err := l.send(batch)
+				if err != nil {
+					logrus.Errorf("Unable to batch messages to Loki: %v", err)
+				}
+				batch = []LabeledEntry{}
+				batchSize = 0
+			}
+		case <-maxWait.C:
+			if batchSize > 0 {
+				err := l.send(batch)
+				if err != nil {
+					logrus.Errorf("Unable to batch messages to Loki: %v", err)
+				}
+				batch = []LabeledEntry{}
+				batchSize = 0
+			}
+			maxWait.Reset(l.BatchWaitSeconds)
+		}
 	}
-	lokiclient.Shutdown()
-	return
 }
 
 func (l *Loki) GetLatestLog(query string) (latestlog string, err error) {

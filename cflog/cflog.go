@@ -37,11 +37,11 @@ type CFLog struct {
 	Sc_range_end                string
 }
 
-func MockCFLog(filename string, response_type string) (log *CFLog) {
+func MockCFLog(filename string, response_type string, date string, time string) (log *CFLog) {
 	log = &CFLog{
 		Filename:                    filename,
-		Date:                        "-",
-		Time:                        "-",
+		Date:                        date,
+		Time:                        time,
 		X_edge_location:             "-",
 		Sc_bytes:                    "-",
 		C_ip:                        "-",

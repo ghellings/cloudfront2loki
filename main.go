@@ -46,7 +46,7 @@ func main() {
 		log.SetLevel(log.InfoLevel)
 	}
 
-	lokiclient := loki.New(c.LokiHost, c.LokiLogLevel, c.LokiBatchSize, c.LokiBatchWaitSeconds)
+	lokiclient := loki.New(c.LokiHost, c.LokiBatchSize, c.LokiBatchWaitSeconds, c.LokiLabels, []string{"Filename", "Date"})
 	s3logclient := s3logs.New(c.Region, c.Bucket, c.Prefix, c.Concurrency)
 
 	// File the last file pushed to Loki
@@ -90,7 +90,7 @@ func main() {
 				}
 				if len(cflogs) > 0 {
 					log.Info("Pushing files up to Loki...")
-					err = lokiclient.PushLogs(cflogs, c.LokiLabels)
+					err = lokiclient.PushLogs(cflogs)
 					if err != nil {
 						log.Error(fmt.Sprintf("%v", err))
 					} else {
@@ -115,7 +115,7 @@ func main() {
 			lastfiledate = t.Format(timeformat)
 			if len(cflogs) > 0 {
 				log.Info("Pushing log lines to Loki...")
-				err = lokiclient.PushLogs(cflogs, c.LokiLabels)
+				err = lokiclient.PushLogs(cflogs)
 				if err != nil {
 					log.Error(fmt.Sprintf("%v", err))
 				}

@@ -6,52 +6,104 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/ghellings/cloudfront2loki/cflog"
+	"github.com/grafana/loki/pkg/logproto"
 	"github.com/stretchr/testify/require"
 )
 
 func TestNew(t *testing.T) {
-	loki := New("bogus")
-	require.NotNil(t, loki)
-	loki = New("bogus", "DEBUG")
-	require.NotNil(t, loki)
-	loki = New("bogus", "INFO")
-	require.NotNil(t, loki)
-	loki = New("bogus", "WARN")
-	require.NotNil(t, loki)
-	loki = New("bogus", "DISABLE")
-	require.NotNil(t, loki)
-	loki = New("bogus", "ERROR", 1000, 500)
+	labels := "{k1=\"v1\",k2=\"v2\"}"
+	addfields := []string{"Date", "Filename"}
+	loki := New("bogus", 1, 1, labels, addfields)
 	require.NotNil(t, loki)
 }
 
 func TestPushLogs(t *testing.T) {
 	response := ""
-	respstr := "{\"data\":{\"stats\": {\"ingester\":{\"totalChunksMatched\":0}}}}\n"
-	ts := mockHttpServer(respstr, 200, &response)
+	ts := mockHttpServer("", 204, &response)
 	defer ts.Close()
-
 	var err error
 	var loki *Loki
 	var logs []*cflog.CFLog
-	loglevels := []string{"", "DEBUG", "INFO", "WARN", "DISABLE", "ERROR"}
-	for _, loglevel := range loglevels {
-		loki = New(ts.URL[7:], loglevel, 1000)
-		logs = []*cflog.CFLog{
-			cflog.MockCFLog("bogus-file1", "Hit"),
-			cflog.MockCFLog("bogus-file2", "Miss"),
-			cflog.MockCFLog("bogus-file3", "RefreshHit"),
-			cflog.MockCFLog("bogus-file3", "AbortedOrigin"),
-			cflog.MockCFLog("bogus-file3", "Redirect"),
-			cflog.MockCFLog("bogus-file3", "ClientCommError"),
-			cflog.MockCFLog("bogus-file3", "ClientHungUpRequest"),
-			cflog.MockCFLog("bogus-file3", "InvalidRequest"),
-			cflog.MockCFLog("bogus-file2", "Error"),
-		}
-		err = loki.PushLogs(logs, "{\"foo\": \"bar\"}")
+	loki = New(ts.URL[7:], 1)
+	go loki.run()
+	logs = []*cflog.CFLog{
+		cflog.MockCFLog("bogus-file1", "Hit", "2021-01-08", "11:50:00"),
+		cflog.MockCFLog("bogus-file1", "Hit", "2021-01-08", "11:50:00"),
+		cflog.MockCFLog("bogus-file2	", "Hit", "2021-01-08", "11:50:00"),
+	}
+	err = loki.PushLogs(logs)
+	require.NoError(t, err)
+}
+
+func TestNewLabels(t *testing.T) {
+
+	labels := "{k1=\"v1\",k2=\"v2\"}"
+	addfields := []string{"Date", "Time", "Filename"}
+	cflog := cflog.CFLog{Date: "2021-01-08", Time: "11:50:00", Filename: "testfilename"}
+	loki := New("bogus", 500, 5, labels, addfields)
+	newlabels := loki.newLabels(cflog)
+	require.Equal(
+		t,
+		"{k1=\"v1\",k2=\"v2\",Date=\"2021-01-08\",Time=\"11:50:00\",Filename=\"testfilename\"}",
+		newlabels,
+	)
+}
+
+func TestProtoEntry(t *testing.T) {
+	loki := New("bogus")
+	cflog := cflog.CFLog{Date: "2021-01-08", Time: "11:50:00", Filename: "testfilename"}
+	jsonstr := "{\"key\":\"value\"}"
+	go loki.run()
+	err := loki.protoEntry(cflog, jsonstr)
+	require.NoError(t, err)
+}
+
+func TestSend(t *testing.T) {
+	response := ""
+	timestamp, err := time.Parse(time.RFC3339, "2021-01-08T11:50:00Z")
+	require.NoError(t, err)
+	entry := logproto.Entry{
+		Timestamp: timestamp,
+		Line:      "bogus",
+	}
+	labeledentries := []LabeledEntry{
+		{
+			entry:  entry,
+			labels: "bogus",
+		},
+	}
+	// Expect success
+	ts := mockHttpServer("", 204, &response)
+	loki := New(ts.URL[7:])
+	go loki.run()
+	err = loki.send(labeledentries)
+	require.NoError(t, err)
+
+	// Expect Failure
+	// ts = mockHttpServer("", 500, &response)
+	// loki = New(ts.URL[7:])
+	// go loki.run()
+	// err = loki.send(labeledentries)
+	// require.Error(t,err)
+
+}
+
+func TestRun(t *testing.T) {
+	response := ""
+	ts := mockHttpServer("", 204, &response)
+	loki := New(ts.URL[7:], 2, 1)
+	go loki.run()
+	cflog := cflog.CFLog{Date: "2021-01-08", Time: "11:50:00", Filename: "testfilename"}
+	jsonstr := "{\"key\":\"value\"}"
+	for i := 1; i < 4; i++ {
+		err := loki.protoEntry(cflog, jsonstr)
 		require.NoError(t, err)
 	}
+	time.Sleep(2 * time.Second)
+
 }
 
 func TestIsLogInLoki(t *testing.T) {
@@ -76,7 +128,7 @@ func TestGetLatestLog(t *testing.T) {
 	require.Equal(t, response, "")
 	// empty log response
 	ts = mockHttpServer("{}", 200, &response)
-	loki = New(ts.URL[7:], "DISABLE")
+	loki = New(ts.URL[7:])
 	filename, err = loki.GetLatestLog("{source=\"cloudfront\",job=\"cloudfront2loki\"}")
 	require.NoError(t, err)
 	require.Equal(t, filename, "")

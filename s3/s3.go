@@ -163,7 +163,6 @@ func (s *S3Logs) Download(startafterfile string) (cfloglines []*cflog.CFLog, nex
 		if err != nil {
 			return nil, nextstartafterfile, err
 		}
-		log.Debugf("Found %d files to download", len(files))
 		// Download files and parse them
 		cfloglines_add, err = s.downLoadFiles(files)
 		if err != nil {
@@ -171,8 +170,7 @@ func (s *S3Logs) Download(startafterfile string) (cfloglines []*cflog.CFLog, nex
 		}
 		// Returned parsed files
 		cfloglines = append(cfloglines, cfloglines_add...)
-		if len(cfloglines) >= s.concurrency  || nextstartafterfile == "" {
-			log.Infof("Returning %d log lines", len(cfloglines))
+		if len(cfloglines) >= s.concurrency || nextstartafterfile == "" {
 			return
 		}
 	}
@@ -249,7 +247,7 @@ func (s *S3Logs) WatchBucket(prefix string, pulledfiles map[string]int) (cflogli
 			}
 		}
 		// Quit if no nextfile
-		if len(cfloglines) >= s.concurrency  || nextfile == "" {
+		if len(cfloglines) >= s.concurrency || nextfile == "" {
 			break
 		}
 	}
