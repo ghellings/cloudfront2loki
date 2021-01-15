@@ -83,11 +83,11 @@ func TestSend(t *testing.T) {
 	require.NoError(t, err)
 
 	// Expect Failure
-	// ts = mockHttpServer("", 500, &response)
-	// loki = New(ts.URL[7:])
-	// go loki.run()
-	// err = loki.send(labeledentries)
-	// require.Error(t,err)
+ 	ts = mockHttpServer("", 500, &response)
+ 	loki = New(ts.URL[7:])
+ 	go loki.run()
+ 	err = loki.send(labeledentries)
+ 	require.Error(t,err)
 
 }
 
