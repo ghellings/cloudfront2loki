@@ -13,8 +13,6 @@ RUN adduser \
 WORKDIR $GOPATH/src/cloudfront2loki
 COPY . .
 RUN go get -d -v
-RUN go mod download
-RUN go mod verify
 RUN GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /go/bin/cloudfront2loki
 
 # STEP 2 build a small image
