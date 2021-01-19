@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"reflect"
 	"strings"
-	"sync"
+	//"sync"
+	"sort"
 	"time"
 
 	"github.com/ghellings/cloudfront2loki/cflog"
@@ -24,9 +26,11 @@ type Loki struct {
 	LabelFields        []string
 	BatchEntriesNumber int
 	BatchWaitSeconds   time.Duration
-	entries            chan LabeledEntry
-	quit               chan struct{}
-	waitGroup          sync.WaitGroup
+	//entries            chan LabeledEntry
+	//quit               chan struct{}
+	//waitGroup          sync.WaitGroup
+	batchQue   []LabeledEntry
+	batchTimer time.Time
 }
 
 type LabeledEntry struct {
@@ -35,6 +39,10 @@ type LabeledEntry struct {
 }
 
 func New(lokihost string, args ...interface{}) (loki *Loki) {
+	logrus.SetOutput(os.Stdout)
+	logrus.SetFormatter(&logrus.TextFormatter{
+		FullTimestamp: true,
+	})
 	batch := 500
 	if len(args) > 0 {
 		batch = args[0].(int)
@@ -55,18 +63,20 @@ func New(lokihost string, args ...interface{}) (loki *Loki) {
 		LokiHost:           lokihost,
 		BatchEntriesNumber: batch,
 		BatchWaitSeconds:   batchwait,
-		entries:            make(chan LabeledEntry),
-		quit:               make(chan struct{}),
-		BaseLabels:         baselabels,
-		LabelFields:        labelfields,
+		//	entries:            make(chan LabeledEntry),
+		//	quit:               make(chan struct{}),
+		BaseLabels:  baselabels,
+		LabelFields: labelfields,
 	}
-	go loki.run()
+	loki.batchTimer = time.Now()
+	// go loki.run()
 	return
 }
 
 func (l *Loki) PushLogs(logrecords []*cflog.CFLog) (err error) {
 	filename := ""
 	skippedfilename := ""
+	logrus.Infof("Recieved %d log lines to push to Loki.", len(logrecords))
 
 	// Parse log lines
 	for _, log := range logrecords {
@@ -98,6 +108,11 @@ func (l *Loki) PushLogs(logrecords []*cflog.CFLog) (err error) {
 			}
 			filename = log.Filename
 			logrus.Debugf("Created a new Loki label for %s", filename)
+		} else {
+			err = l.protoEntry(*log, jsonstr)
+			if err != nil {
+				return
+			}
 		}
 	}
 	return
@@ -120,13 +135,30 @@ func (l *Loki) protoEntry(log cflog.CFLog, jsonstr string) (err error) {
 		return
 	}
 	labels := l.newLabels(log)
-	l.entries <- LabeledEntry{
-		entry: logproto.Entry{
-			Timestamp: t,
-			Line:      jsonstr,
+	//l.entries <- LabeledEntry{
+	//	entry: logproto.Entry{
+	//		Timestamp: t,
+	//		Line:      jsonstr,
+	//	},
+	//	labels: labels,
+	//}
+
+	l.batchQue = append(l.batchQue,
+		LabeledEntry{
+			entry: logproto.Entry{
+				Timestamp: t,
+				Line:      jsonstr,
+			},
+			labels: labels,
 		},
-		labels: labels,
+	)
+	if len(l.batchQue) >= l.BatchEntriesNumber || time.Now().Sub(l.batchTimer) > (l.BatchWaitSeconds*time.Second) {
+		logrus.Debugf("Batching %d messages to Loki", len(l.batchQue))
+		l.send(l.batchQue)
+		l.batchQue = []LabeledEntry{}
+		l.batchTimer = time.Now()
 	}
+
 	return
 }
 
@@ -137,6 +169,10 @@ func (l *Loki) send(labeledentries []LabeledEntry) (err error) {
 	}
 	var streams []logproto.Stream
 	for label, entries := range mappedentries {
+		sort.SliceStable(entries,
+			func(i, j int) bool {
+				return entries[i].Timestamp.Before(entries[j].Timestamp)
+			})
 		streams = append(streams, logproto.Stream{
 			Labels:  label,
 			Entries: entries,
@@ -172,47 +208,48 @@ func (l *Loki) send(labeledentries []LabeledEntry) (err error) {
 	return
 }
 
-func (l *Loki) run() {
-	var batch []LabeledEntry
-	batchSize := 0
-	maxWait := time.NewTimer(l.BatchWaitSeconds)
-
-	defer func() {
-		if batchSize > 0 {
-			l.send(batch)
-		}
-
-		l.waitGroup.Done()
-	}()
-
-	for {
-		select {
-		case <-l.quit:
-			return
-		case entry := <-l.entries:
-			batchSize++
-			batch = append(batch, entry)
-			if batchSize >= l.BatchEntriesNumber {
-				err := l.send(batch)
-				if err != nil {
-					logrus.Errorf("Unable to batch messages to Loki: %v", err)
-				}
-				batch = []LabeledEntry{}
-				batchSize = 0
-			}
-		case <-maxWait.C:
-			if batchSize > 0 {
-				err := l.send(batch)
-				if err != nil {
-					logrus.Errorf("Unable to batch messages to Loki: %v", err)
-				}
-				batch = []LabeledEntry{}
-				batchSize = 0
-			}
-			maxWait.Reset(l.BatchWaitSeconds)
-		}
-	}
-}
+// func (l *Loki) run() {
+// 	var batch []LabeledEntry
+// 	batchSize := 0
+// 	maxWait := time.NewTimer(l.BatchWaitSeconds)
+//
+// 	defer func() {
+// 		if batchSize > 0 {
+// 			l.send(batch)
+// 		}
+//
+// 		l.waitGroup.Done()
+// 	}()
+//
+// 	for {
+// 		select {
+// 		case <-l.quit:
+// 			return
+// 		case entry := <-l.entries:
+// 			batchSize++
+// 			batch = append(batch, entry)
+// 			if batchSize >= l.BatchEntriesNumber {
+// 				err := l.send(batch)
+// 				if err != nil {
+// 					logrus.Errorf("Unable to batch messages to Loki: %v", err)
+// 				}
+// 				batch = []LabeledEntry{}
+// 				batchSize = 0
+// 			}
+// 		case <-maxWait.C:
+// 			if batchSize > 0 {
+// 				logrus.Errorf("Batching %d logs to Loki.", batchSize)
+// 				err := l.send(batch)
+// 				if err != nil {
+// 					logrus.Errorf("Unable to batch messages to Loki: %v", err)
+// 				}
+// 				batch = []LabeledEntry{}
+// 				batchSize = 0
+// 			}
+// 			maxWait.Reset(l.BatchWaitSeconds)
+// 		}
+// 	}
+// }
 
 func (l *Loki) GetLatestLog(query string) (latestlog string, err error) {
 	latestlog = ""

@@ -92,7 +92,7 @@ func main() {
 					log.Info("Pushing files up to Loki...")
 					err = lokiclient.PushLogs(cflogs)
 					if err != nil {
-						log.Error(fmt.Sprintf("%v", err))
+						log.Errorf(fmt.Sprintf("%v", err))
 					} else {
 						for _, file := range cflogs {
 							pushedfiles[file.Filename] = 1
@@ -109,7 +109,7 @@ func main() {
 			var cflogs []*cflog.CFLog
 			cflogs, nextfile, err = s3logclient.Download(nextfile)
 			if err != nil {
-				log.Error(fmt.Sprintf("%v", err))
+				log.Errorf(fmt.Sprintf("%v", err))
 			}
 			t = t.Add(time.Duration(61) * time.Minute)
 			lastfiledate = t.Format(timeformat)
@@ -117,7 +117,7 @@ func main() {
 				log.Info("Pushing log lines to Loki...")
 				err = lokiclient.PushLogs(cflogs)
 				if err != nil {
-					log.Error(fmt.Sprintf("%v", err))
+					log.Errorf(fmt.Sprintf("%v", err))
 				}
 			}
 		}

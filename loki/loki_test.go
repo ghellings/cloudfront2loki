@@ -28,7 +28,7 @@ func TestPushLogs(t *testing.T) {
 	var loki *Loki
 	var logs []*cflog.CFLog
 	loki = New(ts.URL[7:], 1)
-	go loki.run()
+	//	go loki.run()
 	logs = []*cflog.CFLog{
 		cflog.MockCFLog("bogus-file1", "Hit", "2021-01-08", "11:50:00"),
 		cflog.MockCFLog("bogus-file1", "Hit", "2021-01-08", "11:50:00"),
@@ -56,7 +56,7 @@ func TestProtoEntry(t *testing.T) {
 	loki := New("bogus")
 	cflog := cflog.CFLog{Date: "2021-01-08", Time: "11:50:00", Filename: "testfilename"}
 	jsonstr := "{\"key\":\"value\"}"
-	go loki.run()
+	//	go loki.run()
 	err := loki.protoEntry(cflog, jsonstr)
 	require.NoError(t, err)
 }
@@ -78,33 +78,33 @@ func TestSend(t *testing.T) {
 	// Expect success
 	ts := mockHttpServer("", 204, &response)
 	loki := New(ts.URL[7:])
-	go loki.run()
+	//	go loki.run()
 	err = loki.send(labeledentries)
 	require.NoError(t, err)
 
 	// Expect Failure
- 	ts = mockHttpServer("", 500, &response)
- 	loki = New(ts.URL[7:])
- 	go loki.run()
- 	err = loki.send(labeledentries)
- 	require.Error(t,err)
+	ts = mockHttpServer("", 500, &response)
+	loki = New(ts.URL[7:])
+	// 	go loki.run()
+	err = loki.send(labeledentries)
+	require.Error(t, err)
 
 }
 
-func TestRun(t *testing.T) {
-	response := ""
-	ts := mockHttpServer("", 204, &response)
-	loki := New(ts.URL[7:], 2, 1)
-	go loki.run()
-	cflog := cflog.CFLog{Date: "2021-01-08", Time: "11:50:00", Filename: "testfilename"}
-	jsonstr := "{\"key\":\"value\"}"
-	for i := 1; i < 4; i++ {
-		err := loki.protoEntry(cflog, jsonstr)
-		require.NoError(t, err)
-	}
-	time.Sleep(2 * time.Second)
-
-}
+// func TestRun(t *testing.T) {
+// 	response := ""
+// 	ts := mockHttpServer("", 204, &response)
+// 	loki := New(ts.URL[7:], 2, 1)
+// 	go loki.run()
+// 	cflog := cflog.CFLog{Date: "2021-01-08", Time: "11:50:00", Filename: "testfilename"}
+// 	jsonstr := "{\"key\":\"value\"}"
+// 	for i := 1; i < 4; i++ {
+// 		err := loki.protoEntry(cflog, jsonstr)
+// 		require.NoError(t, err)
+// 	}
+// 	time.Sleep(2 * time.Second)
+//
+// }
 
 func TestIsLogInLoki(t *testing.T) {
 	response := ""
