@@ -63,8 +63,8 @@ func New(lokihost string, args ...interface{}) (loki *Loki) {
 		LokiHost:           lokihost,
 		BatchEntriesNumber: batch,
 		BatchWaitSeconds:   batchwait,
-		BaseLabels:  baselabels,
-		LabelFields: labelfields,
+		BaseLabels:         baselabels,
+		LabelFields:        labelfields,
 	}
 	loki.batchTimer = time.Now()
 	return
@@ -102,7 +102,7 @@ func (l *Loki) PushLogs(logrecords []*cflog.CFLog) (err error) {
 	sort.SliceStable(labeledentries,
 		func(i, j int) bool {
 			return labeledentries[i].entry.Timestamp.Before(labeledentries[j].entry.Timestamp)
-	})
+		})
 
 	// Manage queue
 	for _, labeledentry := range labeledentries {

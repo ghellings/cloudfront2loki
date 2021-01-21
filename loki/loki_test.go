@@ -79,7 +79,6 @@ func TestSend(t *testing.T) {
 
 }
 
-
 func TestIsLogInLoki(t *testing.T) {
 	response := ""
 	respstr := "{\"data\":{\"stats\": {\"ingester\":{\"totalChunksMatched\":1}}}}\n"
