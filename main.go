@@ -46,7 +46,14 @@ func main() {
 		log.SetLevel(log.InfoLevel)
 	}
 
-	lokiclient := loki.New(c.LokiHost, c.LokiBatchSize, c.LokiBatchWaitSeconds, c.LokiLabels, []string{"Filename", "Date"})
+	labelfields := []string{"Filename", "Date", "X_edge_result_type"}
+	lokiclient := loki.New(
+		c.LokiHost,
+		c.LokiBatchSize,
+		c.LokiBatchWaitSeconds,
+		c.LokiLabels,
+		labelfields,
+	)
 	s3logclient := s3logs.New(c.Region, c.Bucket, c.Prefix, c.Concurrency)
 
 	// File the last file pushed to Loki
