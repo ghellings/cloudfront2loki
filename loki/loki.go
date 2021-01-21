@@ -86,7 +86,7 @@ func (l *Loki) PushLogs(logrecords []*cflog.CFLog) (err error) {
 		jsonstr := string(jsondata)
 
 		var t time.Time
-		t, err = time.Parse(time.RFC3339Nano, fmt.Sprintf("%sT%s.%09dZ", log.Date, log.Time, time.Now().Nanosecond()))
+		t, err = time.Parse(time.RFC3339Nano, fmt.Sprintf("%sT%sZ", log.Date, log.Time))
 		if err != nil {
 			return
 		}
@@ -190,7 +190,10 @@ func (l *Loki) send(labeledentries []LabeledEntry) (err error) {
 		defer resp.Body.Close()
 		if resp.StatusCode != 204 {
 			body, _ := ioutil.ReadAll(resp.Body)
-			err = fmt.Errorf("Unexpected HTTP response\nstatus code: %d\nurl: %s\nmessage: %slabel: %s", resp.StatusCode, pushurl, string(body), label)
+			err = fmt.Errorf(
+				"Unexpected HTTP response\nstatus code: %d\nurl: %s\nmessage: %slabel: %s",
+				resp.StatusCode, pushurl, string(body), label,
+			)
 			continue
 		}
 		logrus.Debugf("Loki accepted %d log entries from %d streams", len(mappedentries[label]), len(streams))

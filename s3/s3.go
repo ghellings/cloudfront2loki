@@ -252,6 +252,5 @@ func (s *S3Logs) WatchBucket(prefix string, pulledfiles map[string]int) (cflogli
 		}
 	}
 	pulledfilesret = pulledfiles
-	log.Infof("Returning %d log lines", len(cfloglines))
 	return
 }

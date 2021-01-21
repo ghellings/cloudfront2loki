@@ -119,6 +119,11 @@ func main() {
 				if err != nil {
 					log.Errorf(fmt.Sprintf("%v", err))
 				}
+				// clear out previous pushed files and add the most recent for the switch over to watching a bucket
+				pushedfiles = map[string]int{}
+				for _, file := range cflogs {
+					pushedfiles[file.Filename] = 1
+				}
 			}
 		}
 	}
