@@ -52,15 +52,6 @@ func TestNewLabels(t *testing.T) {
 	)
 }
 
-func TestProtoEntry(t *testing.T) {
-	loki := New("bogus")
-	cflog := cflog.CFLog{Date: "2021-01-08", Time: "11:50:00", Filename: "testfilename"}
-	jsonstr := "{\"key\":\"value\"}"
-	//	go loki.run()
-	err := loki.protoEntry(cflog, jsonstr)
-	require.NoError(t, err)
-}
-
 func TestSend(t *testing.T) {
 	response := ""
 	timestamp, err := time.Parse(time.RFC3339, "2021-01-08T11:50:00Z")

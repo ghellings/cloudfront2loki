@@ -74,47 +74,58 @@ func New(lokihost string, args ...interface{}) (loki *Loki) {
 }
 
 func (l *Loki) PushLogs(logrecords []*cflog.CFLog) (err error) {
-	filename := ""
-	skippedfilename := ""
 	logrus.Infof("Recieved %d log lines to push to Loki.", len(logrecords))
-
-	// Parse log lines
+	var labeledentries []LabeledEntry
 	for _, log := range logrecords {
 		// Turn log line into json
 		var jsondata []byte
 		jsondata, err = json.Marshal(log)
 		if err != nil {
-			return
-		}
-		jsonstr := string(jsondata)
-		// Skip this log line if we're already figured out it's in loki
-		if log.Filename == skippedfilename {
 			continue
 		}
-		// This log line came from a file that's different than the last
-		if log.Filename != filename {
-			// Check if this file is already in loki
-			var exists bool
-			if exists, err = l.IsLogInLoki(log.Filename); exists {
-				if log.Filename != skippedfilename {
-					logrus.Warnf("Skipping file %s, already in Loki", log.Filename)
-					skippedfilename = log.Filename
-				}
-				continue
-			}
-			err = l.protoEntry(*log, jsonstr)
-			if err != nil {
-				return
-			}
-			filename = log.Filename
-			logrus.Debugf("Created a new Loki label for %s", filename)
-		} else {
-			err = l.protoEntry(*log, jsonstr)
-			if err != nil {
-				return
-			}
+		jsonstr := string(jsondata)
+
+		var t time.Time
+		t, err = time.Parse(time.RFC3339Nano, fmt.Sprintf("%sT%s.%09dZ", log.Date, log.Time, time.Now().Nanosecond()))
+		if err != nil {
+			return
 		}
+
+		labels := l.newLabels(*log)
+		//l.entries <- LabeledEntry{
+		//	entry: logproto.Entry{
+		//		Timestamp: t,
+		//		Line:      jsonstr,
+		//	},
+		//	labels: labels,
+		//}
+
+		labeledentries = append(labeledentries,
+			LabeledEntry{
+				entry: logproto.Entry{
+					Timestamp: t,
+					Line:      jsonstr,
+				},
+				labels: labels,
+			},
+		)
 	}
+
+	sort.SliceStable(labeledentries,
+		func(i, j int) bool {
+			return labeledentries[i].entry.Timestamp.Before(labeledentries[j].entry.Timestamp)
+		})
+
+	// Manage queue
+	for _, labeledentry := range labeledentries {
+		l.batchQue = append(l.batchQue, labeledentry)
+		if len(l.batchQue) >= l.BatchEntriesNumber || time.Now().Sub(l.batchTimer) > (l.BatchWaitSeconds*time.Second) {
+			logrus.Debugf("Batching %d messages to Loki", len(l.batchQue))
+			err = l.send(l.batchQue)
+		}
+
+	}
+	err = l.send(l.batchQue)
 	return
 }
 
@@ -128,83 +139,64 @@ func (l *Loki) newLabels(log cflog.CFLog) (newlabels string) {
 	return
 }
 
-func (l *Loki) protoEntry(log cflog.CFLog, jsonstr string) (err error) {
-	var t time.Time
-	t, err = time.Parse(time.RFC3339, log.Date+"T"+log.Time+"Z")
-	if err != nil {
-		return
-	}
-	labels := l.newLabels(log)
-	//l.entries <- LabeledEntry{
-	//	entry: logproto.Entry{
-	//		Timestamp: t,
-	//		Line:      jsonstr,
-	//	},
-	//	labels: labels,
-	//}
-
-	l.batchQue = append(l.batchQue,
-		LabeledEntry{
-			entry: logproto.Entry{
-				Timestamp: t,
-				Line:      jsonstr,
-			},
-			labels: labels,
-		},
-	)
-	if len(l.batchQue) >= l.BatchEntriesNumber || time.Now().Sub(l.batchTimer) > (l.BatchWaitSeconds*time.Second) {
-		logrus.Debugf("Batching %d messages to Loki", len(l.batchQue))
-		l.send(l.batchQue)
-		l.batchQue = []LabeledEntry{}
-		l.batchTimer = time.Now()
-	}
-
-	return
-}
-
 func (l *Loki) send(labeledentries []LabeledEntry) (err error) {
 	mappedentries := make(map[string][]logproto.Entry)
 	for _, log := range labeledentries {
 		mappedentries[log.labels] = append(mappedentries[log.labels], log.entry)
 	}
-	var streams []logproto.Stream
-	for label, entries := range mappedentries {
-		sort.SliceStable(entries,
-			func(i, j int) bool {
-				return entries[i].Timestamp.Before(entries[j].Timestamp)
-			})
+	labels := make([]string, 0, len(mappedentries))
+	for key, _ := range mappedentries {
+		labels = append(labels, key)
+	}
+	sort.Sort(sort.StringSlice(labels))
+	logrus.Debugf("Labels: %d\n", len(labels))
+	for _, label := range labels {
+		var streams []logproto.Stream
 		streams = append(streams, logproto.Stream{
 			Labels:  label,
-			Entries: entries,
+			Entries: mappedentries[label],
 		})
+		pushreq := logproto.PushRequest{
+			Streams: streams,
+		}
+		for n, _ := range pushreq.Streams {
+			sort.SliceStable(pushreq.Streams[n].Entries,
+				func(i, j int) bool {
+					return pushreq.Streams[n].Entries[i].Timestamp.Before(pushreq.Streams[n].Entries[j].Timestamp)
+				})
+		}
+
+		var buf []byte
+		buf, err = proto.Marshal(&pushreq)
+		if err != nil {
+			logrus.Errorf("Failed to marshal streams: %v", err)
+			continue
+		}
+		buf = snappy.Encode(nil, buf)
+		pushurl := fmt.Sprintf("http://%s/api/prom/push", l.LokiHost)
+		client := &http.Client{}
+		var req *http.Request
+		req, err = http.NewRequest("POST", pushurl, bytes.NewBuffer(buf))
+		if err != nil {
+			logrus.Errorf("Failed to POST to Loki host %s :%v", l.LokiHost, err)
+			continue
+		}
+		req.Header.Set("Content-Type", "application/x-protobuf")
+		var resp *http.Response
+		resp, err = client.Do(req)
+		if err != nil {
+			continue
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != 204 {
+			body, _ := ioutil.ReadAll(resp.Body)
+			err = fmt.Errorf("Unexpected HTTP response\nstatus code: %d\nurl: %s\nmessage: %slabel: %s", resp.StatusCode, pushurl, string(body), label)
+			continue
+		}
+		logrus.Debugf("Loki accepted %d log entries from %d streams", len(mappedentries[label]), len(streams))
 	}
-	pushreq := logproto.PushRequest{
-		Streams: streams,
-	}
-	buf, err := proto.Marshal(&pushreq)
-	if err != nil {
-		logrus.Errorf("Failed to marshal streams: %v", err)
-		return err
-	}
-	buf = snappy.Encode(nil, buf)
-	pushurl := fmt.Sprintf("http://%s/api/prom/push", l.LokiHost)
-	client := &http.Client{}
-	req, err := http.NewRequest("POST", pushurl, bytes.NewBuffer(buf))
-	if err != nil {
-		logrus.Errorf("Failed to POST to Loki host %s :%v", l.LokiHost, err)
-		return err
-	}
-	req.Header.Set("Content-Type", "application/x-protobuf")
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 204 {
-		body, _ := ioutil.ReadAll(resp.Body)
-		err = fmt.Errorf("Unexpected HTTP status code: %d url: %s message: %s", resp.StatusCode, pushurl, string(body))
-		return err
-	}
+	l.batchQue = []LabeledEntry{}
+	l.batchTimer = time.Now()
 	return
 }
 
