@@ -63,13 +63,10 @@ func New(lokihost string, args ...interface{}) (loki *Loki) {
 		LokiHost:           lokihost,
 		BatchEntriesNumber: batch,
 		BatchWaitSeconds:   batchwait,
-		//	entries:            make(chan LabeledEntry),
-		//	quit:               make(chan struct{}),
 		BaseLabels:  baselabels,
 		LabelFields: labelfields,
 	}
 	loki.batchTimer = time.Now()
-	// go loki.run()
 	return
 }
 
@@ -90,16 +87,7 @@ func (l *Loki) PushLogs(logrecords []*cflog.CFLog) (err error) {
 		if err != nil {
 			return
 		}
-
 		labels := l.newLabels(*log)
-		//l.entries <- LabeledEntry{
-		//	entry: logproto.Entry{
-		//		Timestamp: t,
-		//		Line:      jsonstr,
-		//	},
-		//	labels: labels,
-		//}
-
 		labeledentries = append(labeledentries,
 			LabeledEntry{
 				entry: logproto.Entry{
@@ -114,7 +102,7 @@ func (l *Loki) PushLogs(logrecords []*cflog.CFLog) (err error) {
 	sort.SliceStable(labeledentries,
 		func(i, j int) bool {
 			return labeledentries[i].entry.Timestamp.Before(labeledentries[j].entry.Timestamp)
-		})
+	})
 
 	// Manage queue
 	for _, labeledentry := range labeledentries {
@@ -202,49 +190,6 @@ func (l *Loki) send(labeledentries []LabeledEntry) (err error) {
 	l.batchTimer = time.Now()
 	return
 }
-
-// func (l *Loki) run() {
-// 	var batch []LabeledEntry
-// 	batchSize := 0
-// 	maxWait := time.NewTimer(l.BatchWaitSeconds)
-//
-// 	defer func() {
-// 		if batchSize > 0 {
-// 			l.send(batch)
-// 		}
-//
-// 		l.waitGroup.Done()
-// 	}()
-//
-// 	for {
-// 		select {
-// 		case <-l.quit:
-// 			return
-// 		case entry := <-l.entries:
-// 			batchSize++
-// 			batch = append(batch, entry)
-// 			if batchSize >= l.BatchEntriesNumber {
-// 				err := l.send(batch)
-// 				if err != nil {
-// 					logrus.Errorf("Unable to batch messages to Loki: %v", err)
-// 				}
-// 				batch = []LabeledEntry{}
-// 				batchSize = 0
-// 			}
-// 		case <-maxWait.C:
-// 			if batchSize > 0 {
-// 				logrus.Errorf("Batching %d logs to Loki.", batchSize)
-// 				err := l.send(batch)
-// 				if err != nil {
-// 					logrus.Errorf("Unable to batch messages to Loki: %v", err)
-// 				}
-// 				batch = []LabeledEntry{}
-// 				batchSize = 0
-// 			}
-// 			maxWait.Reset(l.BatchWaitSeconds)
-// 		}
-// 	}
-// }
 
 func (l *Loki) GetLatestLog(query string) (latestlog string, err error) {
 	latestlog = ""
